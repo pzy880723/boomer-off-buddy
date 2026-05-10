@@ -9,38 +9,232 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as KnowledgeRouteImport } from './routes/knowledge'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as StoresYouzanRouteImport } from './routes/stores.youzan'
+import { Route as StoresListRouteImport } from './routes/stores.list'
+import { Route as StoresFranchiseesRouteImport } from './routes/stores.franchisees'
+import { Route as PurchaseLogisticsRouteImport } from './routes/purchase.logistics'
+import { Route as PurchaseJapanParcelRouteImport } from './routes/purchase.japan-parcel'
+import { Route as PurchaseJapanBulkRouteImport } from './routes/purchase.japan-bulk'
+import { Route as PurchaseDomesticRouteImport } from './routes/purchase.domestic'
+import { Route as InventoryTransfersRouteImport } from './routes/inventory.transfers'
+import { Route as InventoryProductsRouteImport } from './routes/inventory.products'
+import { Route as InventoryBatchesRouteImport } from './routes/inventory.batches'
 
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KnowledgeRoute = KnowledgeRouteImport.update({
+  id: '/knowledge',
+  path: '/knowledge',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StoresYouzanRoute = StoresYouzanRouteImport.update({
+  id: '/stores/youzan',
+  path: '/stores/youzan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StoresListRoute = StoresListRouteImport.update({
+  id: '/stores/list',
+  path: '/stores/list',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StoresFranchiseesRoute = StoresFranchiseesRouteImport.update({
+  id: '/stores/franchisees',
+  path: '/stores/franchisees',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PurchaseLogisticsRoute = PurchaseLogisticsRouteImport.update({
+  id: '/purchase/logistics',
+  path: '/purchase/logistics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PurchaseJapanParcelRoute = PurchaseJapanParcelRouteImport.update({
+  id: '/purchase/japan-parcel',
+  path: '/purchase/japan-parcel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PurchaseJapanBulkRoute = PurchaseJapanBulkRouteImport.update({
+  id: '/purchase/japan-bulk',
+  path: '/purchase/japan-bulk',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PurchaseDomesticRoute = PurchaseDomesticRouteImport.update({
+  id: '/purchase/domestic',
+  path: '/purchase/domestic',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InventoryTransfersRoute = InventoryTransfersRouteImport.update({
+  id: '/inventory/transfers',
+  path: '/inventory/transfers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InventoryProductsRoute = InventoryProductsRouteImport.update({
+  id: '/inventory/products',
+  path: '/inventory/products',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InventoryBatchesRoute = InventoryBatchesRouteImport.update({
+  id: '/inventory/batches',
+  path: '/inventory/batches',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
+  '/knowledge': typeof KnowledgeRoute
+  '/settings': typeof SettingsRoute
+  '/inventory/batches': typeof InventoryBatchesRoute
+  '/inventory/products': typeof InventoryProductsRoute
+  '/inventory/transfers': typeof InventoryTransfersRoute
+  '/purchase/domestic': typeof PurchaseDomesticRoute
+  '/purchase/japan-bulk': typeof PurchaseJapanBulkRoute
+  '/purchase/japan-parcel': typeof PurchaseJapanParcelRoute
+  '/purchase/logistics': typeof PurchaseLogisticsRoute
+  '/stores/franchisees': typeof StoresFranchiseesRoute
+  '/stores/list': typeof StoresListRoute
+  '/stores/youzan': typeof StoresYouzanRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
+  '/knowledge': typeof KnowledgeRoute
+  '/settings': typeof SettingsRoute
+  '/inventory/batches': typeof InventoryBatchesRoute
+  '/inventory/products': typeof InventoryProductsRoute
+  '/inventory/transfers': typeof InventoryTransfersRoute
+  '/purchase/domestic': typeof PurchaseDomesticRoute
+  '/purchase/japan-bulk': typeof PurchaseJapanBulkRoute
+  '/purchase/japan-parcel': typeof PurchaseJapanParcelRoute
+  '/purchase/logistics': typeof PurchaseLogisticsRoute
+  '/stores/franchisees': typeof StoresFranchiseesRoute
+  '/stores/list': typeof StoresListRoute
+  '/stores/youzan': typeof StoresYouzanRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
+  '/knowledge': typeof KnowledgeRoute
+  '/settings': typeof SettingsRoute
+  '/inventory/batches': typeof InventoryBatchesRoute
+  '/inventory/products': typeof InventoryProductsRoute
+  '/inventory/transfers': typeof InventoryTransfersRoute
+  '/purchase/domestic': typeof PurchaseDomesticRoute
+  '/purchase/japan-bulk': typeof PurchaseJapanBulkRoute
+  '/purchase/japan-parcel': typeof PurchaseJapanParcelRoute
+  '/purchase/logistics': typeof PurchaseLogisticsRoute
+  '/stores/franchisees': typeof StoresFranchiseesRoute
+  '/stores/list': typeof StoresListRoute
+  '/stores/youzan': typeof StoresYouzanRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/dashboard'
+    | '/knowledge'
+    | '/settings'
+    | '/inventory/batches'
+    | '/inventory/products'
+    | '/inventory/transfers'
+    | '/purchase/domestic'
+    | '/purchase/japan-bulk'
+    | '/purchase/japan-parcel'
+    | '/purchase/logistics'
+    | '/stores/franchisees'
+    | '/stores/list'
+    | '/stores/youzan'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/dashboard'
+    | '/knowledge'
+    | '/settings'
+    | '/inventory/batches'
+    | '/inventory/products'
+    | '/inventory/transfers'
+    | '/purchase/domestic'
+    | '/purchase/japan-bulk'
+    | '/purchase/japan-parcel'
+    | '/purchase/logistics'
+    | '/stores/franchisees'
+    | '/stores/list'
+    | '/stores/youzan'
+  id:
+    | '__root__'
+    | '/'
+    | '/dashboard'
+    | '/knowledge'
+    | '/settings'
+    | '/inventory/batches'
+    | '/inventory/products'
+    | '/inventory/transfers'
+    | '/purchase/domestic'
+    | '/purchase/japan-bulk'
+    | '/purchase/japan-parcel'
+    | '/purchase/logistics'
+    | '/stores/franchisees'
+    | '/stores/list'
+    | '/stores/youzan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DashboardRoute: typeof DashboardRoute
+  KnowledgeRoute: typeof KnowledgeRoute
+  SettingsRoute: typeof SettingsRoute
+  InventoryBatchesRoute: typeof InventoryBatchesRoute
+  InventoryProductsRoute: typeof InventoryProductsRoute
+  InventoryTransfersRoute: typeof InventoryTransfersRoute
+  PurchaseDomesticRoute: typeof PurchaseDomesticRoute
+  PurchaseJapanBulkRoute: typeof PurchaseJapanBulkRoute
+  PurchaseJapanParcelRoute: typeof PurchaseJapanParcelRoute
+  PurchaseLogisticsRoute: typeof PurchaseLogisticsRoute
+  StoresFranchiseesRoute: typeof StoresFranchiseesRoute
+  StoresListRoute: typeof StoresListRoute
+  StoresYouzanRoute: typeof StoresYouzanRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/knowledge': {
+      id: '/knowledge'
+      path: '/knowledge'
+      fullPath: '/knowledge'
+      preLoaderRoute: typeof KnowledgeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,22 +242,95 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/stores/youzan': {
+      id: '/stores/youzan'
+      path: '/stores/youzan'
+      fullPath: '/stores/youzan'
+      preLoaderRoute: typeof StoresYouzanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stores/list': {
+      id: '/stores/list'
+      path: '/stores/list'
+      fullPath: '/stores/list'
+      preLoaderRoute: typeof StoresListRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stores/franchisees': {
+      id: '/stores/franchisees'
+      path: '/stores/franchisees'
+      fullPath: '/stores/franchisees'
+      preLoaderRoute: typeof StoresFranchiseesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/purchase/logistics': {
+      id: '/purchase/logistics'
+      path: '/purchase/logistics'
+      fullPath: '/purchase/logistics'
+      preLoaderRoute: typeof PurchaseLogisticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/purchase/japan-parcel': {
+      id: '/purchase/japan-parcel'
+      path: '/purchase/japan-parcel'
+      fullPath: '/purchase/japan-parcel'
+      preLoaderRoute: typeof PurchaseJapanParcelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/purchase/japan-bulk': {
+      id: '/purchase/japan-bulk'
+      path: '/purchase/japan-bulk'
+      fullPath: '/purchase/japan-bulk'
+      preLoaderRoute: typeof PurchaseJapanBulkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/purchase/domestic': {
+      id: '/purchase/domestic'
+      path: '/purchase/domestic'
+      fullPath: '/purchase/domestic'
+      preLoaderRoute: typeof PurchaseDomesticRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inventory/transfers': {
+      id: '/inventory/transfers'
+      path: '/inventory/transfers'
+      fullPath: '/inventory/transfers'
+      preLoaderRoute: typeof InventoryTransfersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inventory/products': {
+      id: '/inventory/products'
+      path: '/inventory/products'
+      fullPath: '/inventory/products'
+      preLoaderRoute: typeof InventoryProductsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inventory/batches': {
+      id: '/inventory/batches'
+      path: '/inventory/batches'
+      fullPath: '/inventory/batches'
+      preLoaderRoute: typeof InventoryBatchesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DashboardRoute: DashboardRoute,
+  KnowledgeRoute: KnowledgeRoute,
+  SettingsRoute: SettingsRoute,
+  InventoryBatchesRoute: InventoryBatchesRoute,
+  InventoryProductsRoute: InventoryProductsRoute,
+  InventoryTransfersRoute: InventoryTransfersRoute,
+  PurchaseDomesticRoute: PurchaseDomesticRoute,
+  PurchaseJapanBulkRoute: PurchaseJapanBulkRoute,
+  PurchaseJapanParcelRoute: PurchaseJapanParcelRoute,
+  PurchaseLogisticsRoute: PurchaseLogisticsRoute,
+  StoresFranchiseesRoute: StoresFranchiseesRoute,
+  StoresListRoute: StoresListRoute,
+  StoresYouzanRoute: StoresYouzanRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
