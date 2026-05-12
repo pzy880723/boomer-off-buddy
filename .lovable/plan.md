@@ -1,113 +1,189 @@
+# 日本小包裹模块重构方案（v2）
 
-# BOOMER OFF 后台 UI 升级方案
+将"日本小包裹"从静态卡片墙升级为完整的小包裹管理工作台：系统用 meruki 账号密码登录抓取该账号下的订单、AI 截图识别、手动录入、列表筛选与详情查看。数据持久化到 Lovable Cloud。
 
-## 1. 品牌资产替换
+---
 
-- 将 `user-uploads://image.png`(BOOMER·OFF vintage group LOGO) 复制到 `src/assets/logo-boomeroff.png`
-- 在 `src/components/app-sidebar.tsx` 顶部品牌区，用真实 LOGO 替换原占位文字/图标，保留折叠态(只显示 "B·O" 圆形标记)与展开态(完整 LOGO + "vintage group" 副标题)两种形态
-- 浏览器 favicon 同步更新(`public/favicon.ico` 替换为同款图标)
+## 一、数据模型（Lovable Cloud）
 
-## 2. 品牌色系重塑(从橙色 → 红色)
-
-在 `src/styles.css` 中重新定义 oklch 色板,保留经典 ERP 浅色基调,用 BOOMER OFF 标志性正红作为 primary:
-
-| Token | 新值(浅色) | 用途 |
+### `japan_parcels`
+| 字段 | 类型 | 说明 |
 |---|---|---|
-| `--primary` | `oklch(0.58 0.22 27)` 正红 | 主按钮、品牌强调、Logo 描边 |
-| `--primary-glow` | `oklch(0.68 0.20 27)` 亮红 | 渐变高光、Hover 态 |
-| `--accent` | `oklch(0.96 0.03 27)` 极淡红 | 选中行背景、Tag 底色 |
-| `--background` | `oklch(0.985 0.002 60)` 暖白灰 | 主背景 |
-| `--card` | `oklch(1 0 0)` 纯白 + 微阴影 | 卡片 |
-| `--sidebar` | `oklch(0.20 0.02 30)` 深炭黑 | 侧边栏改为深色,与红色 Logo 形成强对比,显高级 |
-| `--sidebar-foreground` | `oklch(0.92 0.01 60)` | 深色侧栏文字 |
-| `--sidebar-accent` | `oklch(0.28 0.04 27)` 暗红 | 选中菜单项 |
-| `--chart-1..5` | 红/橘红/金/深蓝/翠绿 协调色板 | 图表 |
-| `--success` / `--warning` / `--destructive` | 保留绿/琥珀/深红 | 状态色 |
+| `id` | uuid PK | |
+| `account_id` | uuid FK → `meruki_accounts.id` | 归属账号，可空（手动/AI 导入时） |
+| `source` | text | `meruki`/`yahoo`/`mercari`/`rakuten`/`manual`/`ai_ocr` |
+| `source_order_no` | text | 来源订单号 |
+| `tracking_no` | text | 国际物流单号 |
+| `item_title` / `item_title_cn` | text | 商品标题（日/中） |
+| `item_image_url` | text | 商品图 |
+| `seller` | text | 卖家 / 店铺 |
+| `category` | text | 品类 |
+| `price_jpy` / `service_fee_jpy` / `domestic_freight_jpy` / `intl_freight_jpy` | numeric | 各项费用（日元） |
+| `total_jpy` / `total_cny` | numeric | 总价 |
+| `exchange_rate` | numeric | 汇率快照 |
+| `status` | text | `bidding`/`paid`/`warehouse_jp`/`shipping_intl`/`customs`/`shipping_cn`/`delivered` |
+| `purchased_at` / `eta` / `received_at` | timestamptz | 阶段时间 |
+| `warehouse_location` | text | meruki 仓库位置 |
+| `weight_g` | numeric | 重量 |
+| `notes` | text | 备注 |
+| `raw_payload` | jsonb | 抓取/识别原始 JSON |
+| `completeness` | int | 字段完整度 0-100 |
+| `created_at` / `updated_at` | timestamptz | |
 
-新增设计 token:
-- `--gradient-brand`: `linear-gradient(135deg, var(--primary), var(--primary-glow))`
-- `--shadow-elegant`: `0 8px 32px -12px color-mix(in oklab, var(--primary) 25%, transparent)`
-- `--shadow-card`: `0 1px 3px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.06)`
-- 字体:全站 `font-feature-settings: "ss01","cv11"`,标题字重 600,数字采用 `tabular-nums`
+唯一索引：`(account_id, source_order_no)`，重复抓取走 upsert。
 
-## 3. 整体布局升级("高级感"细节)
+### `meruki_accounts`
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | uuid PK | |
+| `username` | text | meruki 登录账号 |
+| `password_encrypted` | text | 加密后的密码（pgcrypto + 服务端密钥） |
+| `display_name` | text | 备注名（如"主账号"） |
+| `last_login_at` | timestamptz | 上次登录成功时间 |
+| `last_login_status` | text | `ok` / `failed` / `captcha` |
+| `last_error` | text | 失败原因 |
+| `session_cookie` | text | 登录后获取的 Cookie，自动刷新 |
+| `cookie_expires_at` | timestamptz | Cookie 过期时间 |
 
-### 3.1 侧边栏(深色 + 红色点缀)
-- 深炭黑背景,顶部 LOGO 区域留白加大,下方一道渐变红色 1px 分割线
-- 菜单项:选中态左侧有 3px 红色竖条 + 暗红半透明背景 + 白色文字
-- 分组标签(采购物流/商品库存/门店加盟…)用 11px 大写字母 + 字间距,灰度 50%
-- 底部新增"系统状态"小卡片:在线门店数 / 同步状态 / 当前版本
+### `meruki_sync_runs`
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | uuid PK | |
+| `account_id` | uuid FK | |
+| `started_at` / `finished_at` | timestamptz | |
+| `status` | text | `running` / `success` / `failed` |
+| `fetched_count` / `inserted_count` / `updated_count` | int | |
+| `message` | text | 错误或摘要 |
 
-### 3.2 顶部 Header
-- 高度 56px,白底 + 底部 1px 边框
-- 左侧:折叠按钮 + 面包屑(当前页加粗,父级链接带 hover 下划线)
-- 中间:全局搜索升级为 `⌘K` 命令面板触发器(显示快捷键徽章)
-- 右侧:同步状态指示灯(绿点 + "数据已同步 2 分钟前")、消息铃铛(带未读数字红点)、主题切换、头像菜单(下拉显示用户名、角色、退出)
+RLS：当前无登录体系，开放策略 `USING (true) WITH CHECK (true)`，账号表的密码字段仅服务端 server fn 读写，前端 API 永远不返回明文密码。
 
-### 3.3 内容区
-- 最大宽度 1440,左右留白响应式
-- 所有卡片统一 `rounded-xl border bg-card shadow-card`
-- PageHeader 升级:增加副标题、右上角"最近更新时间"、可选 Tab 导航条
+密码处理：服务端使用环境变量 `MERUKI_ENC_KEY`（已通过 `add_secret` 申请）+ pgcrypto `pgp_sym_encrypt/decrypt`，数据库里只保存密文。
 
-## 4. 各模块内容细节增强
+---
 
-### 4.1 仪表盘 Dashboard(重点)
-新增/重构区块:
-1. **欢迎条**:"晚上好,管理员 · 今天是 2026/05/12 周二" + 当日营业目标完成度迷你环形图
-2. **8 个 KPI 卡**(从 4 个扩到 8 个,2x4 网格):今日营收、月营收、在库估值、订单总量、新增 SKU、待发货、低库存预警、加盟商分账待结算。每个卡新增:迷你 sparkline 趋势线、与上期对比箭头、点击跳转
-3. **采购渠道占比**:环形图 + 右侧渠道明细列表(含金额、占比条、环比)
-4. **物流成本趋势**:折线图叠加面积渐变,新增"汇率波动"次坐标轴
-5. **批次回本率监控**:卡片改为表格行式,显示 批次封面缩略图、名称、成本、已收、回本率进度条、预计回本日期、操作按钮
-6. **门店销售排行 Top 10**:横向条形图,条形末端显示金额,左侧显示门店类型徽章(直营/加盟)
-7. **新增「实时动态」时间轴**:显示最近的入库、调拨、订单、上架事件(类似 GitHub activity feed)
-8. **新增「待办事项」卡**:需审核加盟申请 3 / 待清关包裹 2 / 库存预警 5
+## 二、模块路由结构
 
-### 4.2 采购物流
-- 日本大宗:表格新增"包裹封面图"列、"商品数/重量/体积"汇总、"成本分摊明细"展开行(运费/关税/汇兑损益/单件均摊)
-- 日本小包裹:卡片瀑布流视图切换,显示 拍卖图、落槌价、出价人、到货预计
-- 国内渠道:Tab 加平台 LOGO,每个订单显示商品缩略图、卖家信息、聊天截图入口
-- 物流追踪:时间轴可视化(下单→打包→国际运输→清关→国内派送→入库),地图占位区
+```text
+/purchase/japan-parcel               列表页
+/purchase/japan-parcel/accounts      meruki 账号管理（增删 / 测试登录 / 手动同步）
+/purchase/japan-parcel/new           新建：手动 / AI 识图 双 Tab
+/purchase/japan-parcel/$id           详情页
+```
 
-### 4.3 商品库存
-- 商品档案:网格/表格视图切换,网格卡显示 商品图、品牌、品类标签、状态(在售/调拨中/已售)、RFID EPC 占位、成本/售价/毛利率
-- 采购批次:卡片显示 批次封面拼图、回本进度环、关键指标网格、批次内 SKU 列表抽屉
-- 库存调拨:左右两栏(源门店/目标门店)拖拽式调拨表单 + 历史调拨记录时间轴
+---
 
-### 4.4 门店加盟
-- 门店列表:卡片视图,每店显示 门店照片、地址、店长、本月营收、库存周转、营业状态徽章
-- 加盟商管理:加盟商档案卡(头像、签约日、累计分账、关联门店数)+ 装修进度甘特图
-- 有赞对接:同步状态大卡 + API 调用日志表 + Webhook 订阅列表
+## 三、列表页 `/purchase/japan-parcel`
 
-### 4.5 知识库
-- 左侧分类树 + 中间文章列表(封面图、标题、摘要、阅读量、更新时间)+ 右侧热门/推荐
-- 文章详情页支持目录导航、SOP 步骤分解视图
+工具栏：
+- 关键字搜索（订单号 / 标题 / 卖家 / 物流单号）
+- 状态多选 Badge
+- 来源筛选（meruki 账号下拉 / 拍卖平台 / 手动 / AI）
+- 日期区间（采购时间）
+- "仅看待补全"开关（completeness < 80）
+- 右上：`从 meruki 同步`（弹出账号选择 + 触发抓取）、`AI 识图导入`、`手动新建`、`账号管理`
 
-### 4.6 系统设置
-- 左侧二级菜单(基本信息/成员权限/通知/集成/Webhook/API 密钥/审计日志)
-- 各 Tab 用真实表单占位(开关、输入框、Select),非空白页
+表格列：缩略图 / 订单号 / 商品标题 / 卖家 / 状态 Badge / 总价 ¥ / 采购日期 / 完整度环 / 操作。底部分页。
 
-## 5. 通用组件升级
+数据：server fn `listJapanParcels(filters)` 从 Supabase 拉取。
 
-- `EmptyState` 组件:插画 + 主标题 + 描述 + CTA(替代当前空表格)
-- `StatusBadge` 组件:统一状态徽章(运输中/已入库/清关中/异常),带左侧小圆点
-- `MetricCard` 组件:KPI 卡封装,支持 sparkline、对比、点击
-- `Timeline` 组件:用于物流追踪和实时动态
-- 表格 Hover 高亮 + 斑马纹 + 列头排序图标 + 行内操作菜单
+---
 
-## 6. 实施步骤
+## 四、账号管理 `/purchase/japan-parcel/accounts`
 
-1. 复制 LOGO 资产 → `src/assets/logo-boomeroff.png` + `public/favicon.ico`
-2. 重写 `src/styles.css` 色板 + 新增设计 token(深色侧栏 + 红色品牌)
-3. 改造 `src/components/app-sidebar.tsx`:LOGO 区、菜单选中态、底部状态卡
-4. 改造 `src/routes/__root.tsx` Header:命令面板触发器、同步状态、头像菜单
-5. 新建通用组件:`metric-card.tsx`、`status-badge.tsx`、`empty-state.tsx`、`timeline.tsx`
-6. 扩充 `src/lib/mock-data.ts`:活动事件、待办、商品图占位、门店照片占位、批次封面
-7. 重构 `dashboard.tsx`(8 KPI + 活动时间轴 + 待办)
-8. 依次升级:purchase 4 子页 → inventory 3 子页 → stores 3 子页 → knowledge → settings
+- 列表展示已配置 meruki 账号：用户名（脱敏）/ 备注名 / 上次登录状态 / 上次同步时间。
+- "新增账号"对话框：填写 username + password + 备注名 → 调用 `createMerukiAccount`，服务端立即尝试登录验证，成功后存入。
+- 行操作：`测试登录` / `立即同步` / `查看同步日志（meruki_sync_runs）` / `编辑密码` / `删除`。
+- 同步日志抽屉：展示历史 sync runs，便于排错。
 
-## 7. 不在本次范围
+---
 
-- 不接入真实 API(继续使用 mock-data)
-- 不引入登录与权限(沿用先前决定)
-- 不做暗色模式切换交互(token 仍保留 .dark 以备后用)
-- 商品/门店/批次的图片暂用 Unsplash 占位 URL,后续可换真实素材
+## 五、详情页 `/purchase/japan-parcel/$id`
+
+三栏：
+- 左：商品大图 + 基础信息 + 完整度环
+- 中：分组可编辑表单（商品 / 价格 / 物流 / 备注），每字段标注来源（爬取/识别/手动），保存调用 `updateJapanParcel`
+- 右：状态时间线 + `raw_payload` JSON 折叠查看器
+
+---
+
+## 六、新建 `/purchase/japan-parcel/new`
+
+**Tab 1 · AI 识图**
+- 拖拽 / 点击上传 / `Ctrl+V` 粘贴截图（监听 `paste` 事件）
+- "识别"按钮 → `recognizeParcelScreenshot(imageBase64)` → 通过 Lovable AI Gateway 调 `google/gemini-3-flash-preview`，使用 Vercel AI SDK `Output.object` + Zod schema 强制结构化输出
+- 识别结果回填到下方共用表单，用户复核后保存
+
+**Tab 2 · 手动录入**
+分组表单（商品 / 价格 / 物流 / 备注），保存 `createJapanParcel`，`source = 'manual'`
+
+---
+
+## 七、Server Functions
+
+`src/lib/japan-parcel.functions.ts`
+- `listJapanParcels(filters)` / `getJapanParcel(id)` / `createJapanParcel` / `updateJapanParcel` / `deleteJapanParcel` / `bulkUpsertJapanParcels`
+
+`src/lib/meruki.functions.ts`
+- `listMerukiAccounts()` —— 返回脱敏列表（不含密码、Cookie）
+- `createMerukiAccount({ username, password, displayName })` —— 加密存储 + 立即试登录
+- `updateMerukiAccount(id, patch)` / `deleteMerukiAccount(id)`
+- `testMerukiLogin(accountId)` —— 仅登录验证
+- `syncMerukiOrders(accountId)` —— 登录（必要时复用未过期 Cookie）→ 抓 inProgress 页 → 解析 → upsert 到 `japan_parcels`，写一条 `meruki_sync_runs`
+- `listSyncRuns(accountId)`
+
+`src/lib/ai.functions.ts`
+- `recognizeParcelScreenshot(imageBase64)`
+
+所有 fn 用 Zod `inputValidator`；密码、Cookie 仅在服务端处理，绝不下发。
+
+---
+
+## 八、meruki 登录与抓取实现
+
+服务端纯 `fetch` 流程（在 Cloudflare Worker SSR 内运行，不引入 Node-only 依赖；DOM 解析用 `linkedom`）：
+
+1. **登录**：POST meruki 登录接口，携带 username/password，捕获响应 `Set-Cookie`。如返回验证码/异常，写入 `last_login_status='captcha'/'failed'` 并返回友好错误（前端提示用户改用手动 / 联系站点）。
+2. **缓存 Cookie**：成功后写回 `session_cookie` + `cookie_expires_at`。下次同步先检查未过期则直接复用，过期再重登。
+3. **抓取**：GET `https://www.meruki.cn/personal/order/inProgress`（必要时翻页），用 `linkedom` 解析订单卡片 → 字段映射函数 `parseMerukiInProgress(html)`（纯函数，便于后期适配 DOM 变化）。
+4. **写库**：`(account_id, source_order_no)` upsert 到 `japan_parcels`，未识别字段保留在 `raw_payload`，计算 `completeness`。
+5. **日志**：每次同步写一条 `meruki_sync_runs`。
+
+注意事项已在方案中提示用户：
+- meruki 实际登录接口/参数（是否需要 captcha、token、加密签名）需要在实现阶段抓包确认；如站点强制人机验证，将退化为"用户在浏览器登录后导出 Cookie 粘贴"的兜底方式（保留 `meruki_accounts.session_cookie` 字段即可，无需新增字段）。
+- 抓取频率默认手动触发；不做定时任务，避免触发风控。
+
+---
+
+## 九、组件复用 / 新增
+
+- 复用：`PageHeader` `StatusBadge` `Timeline` `EmptyState` `DataTable`
+- 新增：
+  - `ParcelStatusBadge`（7 种状态预设）
+  - `CompletenessRing`（recharts RadialBar）
+  - `ParcelForm`（新建 / 详情共用）
+  - `ScreenshotDropzone`（拖拽 + 粘贴）
+  - `MerukiAccountDialog`（账号增改）
+
+---
+
+## 十、范围
+
+**本期交付**
+- 3 张数据库表 + pgcrypto 加密 + RLS 开放策略
+- 4 个新路由 + 账号管理 + 列表 / 详情 / 新建（手动 + AI）/ 同步导入完整 UI
+- meruki 账号密码登录 + 抓取 server fn（真实请求；遇到验证码降级为 Cookie 兜底）
+- AI 截图识别 server fn（Lovable AI Gateway，真实可用）
+
+**暂不做**
+- 定时自动同步 / Webhook
+- 多用户权限隔离
+- 与"采购批次"、"物流追踪"模块的数据联动
+
+---
+
+## 十一、需要确认的事项
+
+1. 我会通过 `add_secret` 申请一个 `MERUKI_ENC_KEY`（用于密码列加密）。是否同意？
+2. 如果 meruki 登录接口需要图形/滑动验证码，本期降级为"在 meruki 网页登录后粘贴 Cookie"模式可以吗？（账号密码方式作为首选，Cookie 作为兜底）
+
+确认后即开始按顺序实现：迁移 → 加密 helper → meruki 登录抓取 fn → 账号管理页 → 列表页 → 新建（手动+AI） → 详情页。
