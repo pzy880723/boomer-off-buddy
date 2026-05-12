@@ -225,6 +225,12 @@ function AccountsPage() {
                       <Button variant="ghost" size="sm" onClick={() => syncMut.mutate(a.id as string)} disabled={syncMut.isPending}>
                         <RefreshCw className={`mr-1 h-3.5 w-3.5 ${syncMut.isPending ? "animate-spin" : ""}`} /> 同步
                       </Button>
+                      <Button variant="ghost" size="sm" onClick={() => {
+                        setEditId(a.id as string);
+                        setEditForm({ password: "", cookie: "", display_name: (a.display_name as string) ?? "" });
+                      }}>
+                        <Pencil className="mr-1 h-3.5 w-3.5" /> 编辑
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => setRunsFor(a.id as string)}>
                         <History className="mr-1 h-3.5 w-3.5" /> 日志
                       </Button>
