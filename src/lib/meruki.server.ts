@@ -95,6 +95,77 @@ function parseSetCookie(raw: string): string {
     .join("; ");
 }
 
+// Accept three formats from users:
+//   1) standard Cookie header: "a=1; b=2"
+//   2) DevTools "Application > Cookies" tabular paste (tabs / multiple spaces, with Domain/Path/Expires/Size/Priority columns)
+//   3) JSON array exported from EditThisCookie / Cookie-Editor extensions
+// Returns a sanitized "name=value; name=value" string. Throws on no usable pairs.
+const NAME_RE = /^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$/;
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
+export function normalizeCookieInput(raw: string): string {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) throw new Error("Cookie 为空");
+
+  const pairs: Array<[string, string]> = [];
+  const push = (name: string, value: string) => {
+    name = name.trim();
+    value = value.trim().replace(/[\r\n]+/g, "");
+    if (!name || !NAME_RE.test(name)) return;
+    if (!value) return;
+    pairs.push([name, value]);
+  };
+
+  // JSON array
+  if (trimmed.startsWith("[")) {
+    try {
+      const arr = JSON.parse(trimmed);
+      if (Array.isArray(arr)) {
+        for (const it of arr) {
+          if (it && typeof it.name === "string" && typeof it.value === "string") {
+            push(it.name, it.value);
+          }
+        }
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  // DevTools tabular: multiple lines, tab/space separated
+  if (pairs.length === 0 && /\n/.test(trimmed)) {
+    for (const line of trimmed.split(/\n+/)) {
+      const cols = line.split(/\t+|  +/).map((c) => c.trim()).filter(Boolean);
+      if (cols.length < 2) continue;
+      const [name, value] = cols;
+      if (!name || !value) continue;
+      if (name.toLowerCase() === "name" || value.toLowerCase() === "value") continue;
+      if (ISO_DATE_RE.test(value)) continue;
+      if (/^\d+$/.test(value) && value.length <= 4) continue; // Size column
+      push(name, value);
+    }
+  }
+
+  // Standard Cookie header
+  if (pairs.length === 0) {
+    for (const seg of trimmed.replace(/[\r\n]+/g, "; ").split(/;+/)) {
+      const eq = seg.indexOf("=");
+      if (eq <= 0) continue;
+      push(seg.slice(0, eq), seg.slice(eq + 1));
+    }
+  }
+
+  if (pairs.length === 0) {
+    throw new Error(
+      "Cookie 解析失败：请在 meruki 页面控制台执行 copy(document.cookie) 后粘贴",
+    );
+  }
+  // dedupe by name (last wins)
+  const map = new Map<string, string>();
+  for (const [n, v] of pairs) map.set(n, v);
+  return Array.from(map, ([n, v]) => `${n}=${v}`).join("; ");
+}
+
 export interface ScrapedParcel extends ParcelInput {
   source_order_no: string;
 }
