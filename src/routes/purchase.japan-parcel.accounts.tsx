@@ -201,12 +201,14 @@ function AccountsPage() {
                     <TableCell>
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
                         a.last_login_status === "ok" ? "bg-emerald-50 text-emerald-700" :
+                        a.last_login_status === "cookie_expired" ? "bg-amber-50 text-amber-700" :
                         a.last_login_status === "captcha" ? "bg-amber-50 text-amber-700" :
                         a.last_login_status === "failed" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"
                       }`}>
-                        {a.last_login_status === "ok" ? "✓ 正常" :
+                        {a.last_login_status === "ok" ? "✓ Cookie 有效" :
+                         a.last_login_status === "cookie_expired" ? "Cookie 已失效，点编辑更新" :
                          a.last_login_status === "captcha" ? "需验证码" :
-                         a.last_login_status === "failed" ? "失败" : "未登录"}
+                         a.last_login_status === "failed" ? "失败" : "未测试"}
                       </span>
                       {a.last_error ? <div className="mt-1 text-xs text-muted-foreground">{a.last_error as string}</div> : null}
                     </TableCell>
