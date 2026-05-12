@@ -169,13 +169,13 @@ export const Route = createFileRoute("/api/public/meruki-ingest")({
           if (existing?.id) {
             await supabaseAdmin
               .from("japan_parcels")
-              .update({ ...o, completeness })
+              .update({ ...o, completeness } as never)
               .eq("id", existing.id);
             updated++;
           } else {
             await supabaseAdmin
               .from("japan_parcels")
-              .insert({ ...o, account_id: account.id, completeness });
+              .insert({ ...o, account_id: account.id, completeness } as never);
             inserted++;
           }
         }
