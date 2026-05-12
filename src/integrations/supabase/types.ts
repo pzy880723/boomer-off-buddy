@@ -160,6 +160,41 @@ export type Database = {
         }
         Relationships: []
       }
+      meruki_raw_captures: {
+        Row: {
+          account_id: string | null
+          captured_at: string
+          id: string
+          payload: Json
+          recognized: boolean
+          source_url: string
+        }
+        Insert: {
+          account_id?: string | null
+          captured_at?: string
+          id?: string
+          payload: Json
+          recognized?: boolean
+          source_url: string
+        }
+        Update: {
+          account_id?: string | null
+          captured_at?: string
+          id?: string
+          payload?: Json
+          recognized?: boolean
+          source_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meruki_raw_captures_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "meruki_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meruki_sync_runs: {
         Row: {
           account_id: string | null

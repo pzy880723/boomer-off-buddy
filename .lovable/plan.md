@@ -1,78 +1,69 @@
-## 思路
+# 修复插件「已发送 0」问题
 
-做一个浏览器插件，**当你打开 meruki 任意页面时，它在后台静默抓取所有订单相关的 JSON 响应，自动 POST 到我们系统**。你不用找接口、不用粘 Cookie、不用手动同步——打开页面就完事。
+## 现状
 
-```text
-[meruki 页面]
-     │  浏览器自然加载订单 JSON
-     ▼
-[Chrome 插件 content script]  ← 拦截 fetch/XHR
-     │  挑出 url 含 order/list/parcel 的 JSON 响应
-     ▼
-POST  https://<你的项目>.lovable.app/api/public/meruki-ingest
-      Header: X-Ingest-Secret: <共享密钥>
-      Body:   { account_id, source_url, payload }
-     │
-     ▼
-[后端] 入库 japan_parcels（raw_payload 全存，字段尽力映射）
+- 数据库里没有任何插件上报记录（`japan_parcels` 0 条，`meruki_sync_runs` 最近的两条是旧的 cookie 同步）
+- 插件 popup 显示「已发送 0」且无错误 → 插件已加载、令牌已配，但 `inject.js` 里的 URL 过滤没匹配到任何 meruki 接口
+- 当前过滤词：`order|parcel|package|inProgress|buy|purchase|warehouse|cart|deliver|tracking`，meruki 实际接口路径很可能不含这些词
+
+## 方案
+
+### 1. 放宽抓取规则（`extension/inject.js`）
+
+- 删除 URL 关键词白名单
+- 改为**抓取 meruki.cn 域下所有 JSON 响应**（按 `Content-Type: application/json` 或返回体首字符 `{` `[` 判断）
+- 设置上限：单条 payload > 500KB 跳过，避免爆量
+- 抓取后由后端 `findOrderArray` 决定是不是订单，不是订单也不报错
+
+### 2. 增加诊断字段（`extension/popup.html` + `popup.js` + `background.js`）
+
+新增三个统计：
+- **抓到 JSON**：`inject.js` 捕获了多少条 JSON
+- **已发送**：成功 POST 到后端的次数
+- **识别为订单**：后端识别成功的次数
+- **最近 5 条上报的 URL**（缩略显示，便于我们一眼看出 meruki 真实接口路径）
+
+让我下次能立刻判断：
+- 抓到 JSON = 0 → 用户根本没访问 meruki 或域名不对
+- 抓到 > 0 / 发送 = 0 → 网络/令牌问题
+- 发送 > 0 / 识别 = 0 → 接口路径找到了但订单识别算法没认出，需调
+
+### 3. 后端宽容化（`src/routes/api/public/meruki-ingest.ts`）
+
+- 即使没识别为订单，也把 payload 落到 `meruki_sync_runs.message` 的截断版本（已经做了）
+- 额外把**未识别但来自疑似订单页**的原始 payload 存到一张轻量表 `meruki_raw_captures (id, account_id, source_url, payload jsonb, captured_at)`，方便我直接 SQL 查看真实结构后改解析逻辑
+
+### 4. 重新打包扩展
+
+```
+rm -f public/meruki-ingest-extension.zip
+cd extension && nix run nixpkgs#zip -- -r ../public/meruki-ingest-extension.zip .
 ```
 
-## 我会做的事
+## 用户操作
 
-### 1. 数据库（migration）
-- `meruki_accounts` 表：新增 `ingest_token`（uuid），用于插件按账号绑定上报。每个账号一个唯一 token。
-- `japan_parcels` 表：已有 `raw_payload jsonb`，复用即可。
+1. 重新下载插件 zip → 在 chrome://extensions 点扩展卡片右下角「🔄」重新加载（或删除后重装）
+2. 打开 meruki，**进入「我的订单 / 进行中订单 / 包裹列表」任意页面**并刷新一次
+3. 点插件图标，把「抓到 JSON / 已发送 / 识别为订单 / 最近 URL」截图发我
 
-### 2. 后端公开接口 `src/routes/api/public/meruki-ingest.ts`
-- `POST` 接收 `{ ingest_token, source_url, payload }`
-- 用 `ingest_token` 反查 `account_id`，token 不存在直接 401
-- 把 `payload` 整体存进 `japan_parcels.raw_payload`，并尽力解析常见字段（`orderNo/orderId/itemTitle/price/img/seller/status` 等），按 `(account_id, source_order_no)` upsert
-- 写一条 `meruki_sync_runs` 记录，状态 success / fetched_count
-- **新格式不认识也不报错** —— 全量原始数据已存，后续再加映射
+我看到 URL 后就能精准调整解析，**不再盲猜**。
 
-### 3. Chrome 插件（放在 `extension/` 目录）
-文件结构：
-```text
-extension/
-├── manifest.json          # MV3，permissions: storage, scripting, host: https://*.meruki.cn/*
-├── content.js             # 注入到 meruki 页面
-├── inject.js              # 真正在页面上下文里 patch fetch+XHR（content script 拿不到响应体，必须 inject）
-├── popup.html / popup.js  # 设置：API 基地址 + ingest_token
-├── background.js          # 转发 inject → fetch 上报（绕过 CORS）
-└── icon.png
+## 技术细节
+
+- `inject.js` URL 过滤改成 `() => true`（仅域名判断）
+- 大小限制：`if (txt.length > 500000) return;`
+- popup 新增 chrome.storage 字段：`stats.captured`、`stats.recentUrls: string[]`（上限 5）
+- 新表迁移（如确认要做诊断表）：
+
+```sql
+create table public.meruki_raw_captures (
+  id uuid primary key default gen_random_uuid(),
+  account_id uuid references public.meruki_accounts(id) on delete cascade,
+  source_url text not null,
+  payload jsonb not null,
+  recognized boolean not null default false,
+  captured_at timestamptz not null default now()
+);
+alter table public.meruki_raw_captures enable row level security;
+create policy open_all on public.meruki_raw_captures for all using (true) with check (true);
 ```
-
-工作流程：
-1. `inject.js` 在 meruki 页面里 monkey-patch `window.fetch` 和 `XMLHttpRequest`
-2. 响应是 JSON 且 URL 路径匹配 `/order|parcel|package|inProgress|buy/i` → 把 `{url, body}` 通过 `window.postMessage` 发给 content script
-3. content script 转发给 background service worker
-4. background 用配置好的 token POST 到我们的 `/api/public/meruki-ingest`
-5. popup 显示"今天已上报 N 条 / 上次成功时间"
-
-### 4. 打包 + 下载
-- 用 `nix run nixpkgs#zip` 打包到 `public/meruki-ingest-extension.zip`
-- 在 `accounts.tsx` 顶部加一张卡片：
-  - "下载浏览器插件"按钮（fetch+blob 触发下载）
-  - 4 步安装说明（解压 → chrome://extensions → 开发者模式 → 加载已解压扩展程序）
-  - 每个账号行多一列「上报令牌」，点一下复制，让用户粘到插件 popup 里
-
-### 5. UI 调整
-- "测试 Cookie"和"立即同步"按钮隐藏（不再需要 Cookie 路径，但保留代码以防回退）
-- 同步状态新增一行说明："请保持插件已安装，并定期打开 meruki 进行中订单页"
-- "新增账号"对话框去掉 Cookie 必填，改回只要用户名 + 备注名即可
-
-## 不在本次范围
-
-- Cookie 抓取路径（保留代码，但 UI 不主推）
-- 订单详情页深度抓取（v2 再加，先把列表跑稳）
-- 自动定时拉取（meruki 必须用户主动打开页面才会触发；插件本身不能后台访问 meruki）
-
-## 验收标准
-
-1. 用户在系统里：新增账号 → 复制上报令牌 → 装插件 → 把令牌粘到 popup
-2. 用户打开 meruki "进行中订单"页面 → 几秒后系统订单列表自动出现新数据
-3. 失败时插件 popup 显示原因（401 token 错、网络错等），系统日志页能看到失败的 sync run
-
----
-
-要我按这个开干吗？需要你确认一件事：**插件抓到数据的"上报终点"该用哪个 URL？** 我建议用 `https://project--2158bffa-7f82-4bc6-9df9-c59319d262f7.lovable.app`（稳定的预览地址），等你正式发布后我再让插件支持自定义 baseUrl。
