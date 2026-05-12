@@ -16,10 +16,12 @@ import {
   Building2,
   Users,
   Link2,
+  Activity,
 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -27,10 +29,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
+import logo from "@/assets/logo-boomeroff.png";
 
 const groups = [
   {
@@ -76,42 +77,92 @@ const groups = [
 
 export function AppSidebar() {
   const currentPath = useRouterState({ select: (s) => s.location.pathname });
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
   const isActive = (path: string) => currentPath === path || currentPath.startsWith(path + "/");
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b">
-        <div className="flex items-center gap-2 px-2 py-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
-            BO
+    <Sidebar collapsible="icon" className="border-r-0">
+      <SidebarHeader className="border-b border-sidebar-border">
+        <Link to="/dashboard" className="flex items-center gap-3 px-1 py-2">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white p-1.5 shadow-sm">
+            <img src={logo} alt="BOOMER OFF" className="h-full w-full object-contain" />
           </div>
-          <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-semibold">BOOMER OFF</span>
-            <span className="text-xs text-muted-foreground">品牌管理后台</span>
-          </div>
-        </div>
+          {!collapsed && (
+            <div className="flex min-w-0 flex-col">
+              <span className="text-sm font-bold tracking-wide text-sidebar-foreground">
+                BOOMER·OFF
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/55">
+                vintage group
+              </span>
+            </div>
+          )}
+        </Link>
       </SidebarHeader>
-      <SidebarContent>
+
+      <SidebarContent className="gap-1">
         {groups.map((group) => (
           <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/45">
+              {group.label}
+            </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {group.items.map((item) => (
-                  <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
-                      <Link to={item.url} className="flex items-center gap-2">
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {group.items.map((item) => {
+                  const active = isActive(item.url);
+                  return (
+                    <SidebarMenuItem key={item.url}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        tooltip={item.title}
+                        className="relative h-9 data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-medium hover:bg-sidebar-accent/50"
+                      >
+                        <Link to={item.url} className="flex items-center gap-2.5">
+                          {active && (
+                            <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
+                          )}
+                          <item.icon className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         ))}
       </SidebarContent>
+
+      {!collapsed && (
+        <SidebarFooter className="border-t border-sidebar-border">
+          <div className="rounded-lg bg-sidebar-accent/40 p-3">
+            <div className="flex items-center gap-2 text-xs text-sidebar-foreground/80">
+              <Activity className="h-3.5 w-3.5 text-success" />
+              <span className="font-medium">系统状态</span>
+            </div>
+            <div className="mt-2 space-y-1 text-[11px] text-sidebar-foreground/60">
+              <div className="flex items-center justify-between">
+                <span>在线门店</span>
+                <span className="font-medium tabular-nums text-sidebar-foreground">12 / 14</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>有赞同步</span>
+                <span className="inline-flex items-center gap-1 text-success">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+                  正常
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>版本</span>
+                <span className="tabular-nums">v0.8.4</span>
+              </div>
+            </div>
+          </div>
+        </SidebarFooter>
+      )}
     </Sidebar>
   );
 }

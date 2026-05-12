@@ -8,15 +8,22 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { Search, Bell } from "lucide-react";
+import { Search, Bell, CheckCircle2, Command } from "lucide-react";
 
 import appCss from "../styles.css?url";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Toaster } from "@/components/ui/sonner";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function NotFoundComponent() {
   return (
@@ -117,13 +124,13 @@ function Breadcrumbs() {
   if (segments.length === 0) return <span className="text-sm text-muted-foreground">首页</span>;
   return (
     <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-      <Link to="/dashboard" className="hover:text-foreground">
+      <Link to="/dashboard" className="transition-colors hover:text-foreground">
         首页
       </Link>
       {segments.map((seg, i) => (
         <span key={i} className="flex items-center gap-1.5">
-          <span>/</span>
-          <span className={i === segments.length - 1 ? "text-foreground font-medium" : ""}>
+          <span className="text-border">/</span>
+          <span className={i === segments.length - 1 ? "font-medium text-foreground" : ""}>
             {breadcrumbMap[seg] ?? seg}
           </span>
         </span>
@@ -138,30 +145,63 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <SidebarProvider>
-        <div className="min-h-screen flex w-full bg-background">
+        <div className="flex min-h-screen w-full bg-background">
           <AppSidebar />
-          <div className="flex-1 flex flex-col min-w-0">
-            <header className="h-14 flex items-center gap-3 border-b bg-card px-4 sticky top-0 z-10">
-              <SidebarTrigger />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b bg-card/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+              <SidebarTrigger className="-ml-1" />
+              <div className="hidden h-5 w-px bg-border md:block" />
               <Breadcrumbs />
-              <div className="ml-auto flex items-center gap-2">
-                <div className="relative hidden md:block">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="全局搜索..."
-                    className="pl-8 w-64 h-9 bg-background"
-                  />
+              <div className="ml-auto flex items-center gap-1.5">
+                <button
+                  type="button"
+                  className="hidden h-9 w-72 items-center gap-2 rounded-md border bg-background/60 px-3 text-sm text-muted-foreground transition-colors hover:bg-background hover:text-foreground md:inline-flex"
+                >
+                  <Search className="h-4 w-4" />
+                  <span className="flex-1 text-left">搜索商品、订单、批次…</span>
+                  <kbd className="inline-flex h-5 items-center gap-0.5 rounded border bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
+                    <Command className="h-2.5 w-2.5" />K
+                  </kbd>
+                </button>
+                <div className="hidden items-center gap-1.5 rounded-md border border-success/20 bg-success/10 px-2 py-1 text-xs text-success lg:flex">
+                  <CheckCircle2 className="h-3 w-3" />
+                  数据已同步 · 2 分钟前
                 </div>
-                <Button variant="ghost" size="icon" className="h-9 w-9">
+                <Button variant="ghost" size="icon" className="relative h-9 w-9">
                   <Bell className="h-4 w-4" />
+                  <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                    5
+                  </span>
                 </Button>
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">管</AvatarFallback>
-                </Avatar>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-2 rounded-md p-1 transition-colors hover:bg-muted">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-gradient-brand text-xs font-medium text-primary-foreground">
+                          管
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="hidden text-left lg:block">
+                        <div className="text-xs font-medium leading-tight">管理员</div>
+                        <div className="text-[10px] leading-tight text-muted-foreground">超级管理员</div>
+                      </div>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuLabel>我的账户</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>个人资料</DropdownMenuItem>
+                    <DropdownMenuItem>偏好设置</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive">退出登录</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </header>
-            <main className="flex-1 p-6 overflow-auto">
-              <Outlet />
+            <main className="flex-1 overflow-auto">
+              <div className="mx-auto w-full max-w-[1480px] p-6">
+                <Outlet />
+              </div>
             </main>
           </div>
         </div>

@@ -1,59 +1,127 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CheckCircle2, Circle, Truck } from "lucide-react";
+import { Truck, MapPin, Settings } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { PageHeader } from "@/components/page-header";
+import { logisticsTracking } from "@/lib/mock-data";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/purchase/logistics")({
   head: () => ({ meta: [{ title: "物流追踪 · 采购物流" }, { name: "description", content: "国际与国内物流轨迹实时追踪" }] }),
   component: LogisticsPage,
 });
 
-const tracking = [
-  { time: "2026-05-09 14:22", node: "已抵达上海浦东国际机场", done: true },
-  { time: "2026-05-09 03:18", node: "成田机场起飞", done: true },
-  { time: "2026-05-08 18:40", node: "包裹于成田机场仓库交接", done: true },
-  { time: "2026-05-08 09:10", node: "东京集货中心打包封装", done: true },
-  { time: "2026-05-10 (预计)", node: "上海清关 / 派送", done: false },
-];
-
 function LogisticsPage() {
   return (
     <div>
-      <PageHeader title="物流追踪" description="国际与国内物流轨迹实时查询" />
+      <PageHeader
+        title="物流追踪"
+        description="国际与国内物流轨迹实时查询 · 6 节点全链路可视化"
+        meta={<span>当前在途包裹 · 8 票 · 预计 7 日内全部入库</span>}
+      />
+
       <div className="grid gap-4 lg:grid-cols-2">
+        {logisticsTracking.map((pkg) => (
+          <Card key={pkg.id}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gradient-brand text-primary-foreground">
+                    <Truck className="h-4 w-4" />
+                  </div>
+                  {pkg.title}
+                </CardTitle>
+                <Badge variant="outline" className="font-mono text-xs">
+                  {pkg.progress}%
+                </Badge>
+              </div>
+              <p className="mt-1 pl-10 text-xs text-muted-foreground">{pkg.carrier}</p>
+            </CardHeader>
+            <CardContent>
+              <Progress value={pkg.progress} className="mb-5 h-1.5 [&>*]:bg-gradient-brand" />
+              <ol className="space-y-3.5">
+                {pkg.steps.map((s, i) => (
+                  <li key={i} className="flex items-start gap-3">
+                    <div className="relative flex flex-col items-center">
+                      <span
+                        className={cn(
+                          "flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-medium",
+                          s.done
+                            ? "bg-success text-success-foreground"
+                            : s.current
+                            ? "bg-gradient-brand text-primary-foreground ring-4 ring-primary/15"
+                            : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {i + 1}
+                      </span>
+                      {i < pkg.steps.length - 1 && (
+                        <span className={cn("mt-1 h-6 w-px", s.done ? "bg-success" : "bg-border")} />
+                      )}
+                    </div>
+                    <div className="flex-1 pt-0.5">
+                      <p
+                        className={cn(
+                          "text-sm",
+                          s.done ? "font-medium" : s.current ? "font-medium text-primary" : "text-muted-foreground",
+                        )}
+                      >
+                        {s.label}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">{s.date}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Truck className="h-4 w-4" />
-              EH123456789JP · 日本大宗包裹
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MapPin className="h-4 w-4 text-primary" />
+              全球物流地图
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ol className="relative border-l-2 border-border ml-2 space-y-4">
-              {tracking.map((t, i) => (
-                <li key={i} className="ml-4">
-                  <span className="absolute -left-[9px] flex h-4 w-4 items-center justify-center">
-                    {t.done ? (
-                      <CheckCircle2 className="h-4 w-4 text-success bg-card" />
-                    ) : (
-                      <Circle className="h-4 w-4 text-muted-foreground bg-card" />
-                    )}
-                  </span>
-                  <p className={`text-sm ${t.done ? "" : "text-muted-foreground"}`}>{t.node}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{t.time}</p>
-                </li>
-              ))}
-            </ol>
+            <div className="flex h-48 items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30 text-sm text-muted-foreground">
+              地图组件占位 · 接入高德/Mapbox 后展示
+            </div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">物流接口配置</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Settings className="h-4 w-4 text-primary" />
+              物流接口配置
+            </CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground space-y-2">
-            <p>• 国际物流：日本邮政 EMS / DHL 接口（待配置）</p>
-            <p>• 国内物流：快递100 通用查询接口（待配置）</p>
-            <p className="pt-2">配置真实 API Key 后将自动更新所有包裹轨迹。</p>
+          <CardContent className="space-y-3 text-sm">
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <p className="font-medium">日本邮政 EMS</p>
+                <p className="text-xs text-muted-foreground">国际段轨迹查询</p>
+              </div>
+              <Badge className="bg-warning/15 text-warning-foreground hover:bg-warning/20">待配置</Badge>
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <p className="font-medium">DHL Express</p>
+                <p className="text-xs text-muted-foreground">高时效国际段</p>
+              </div>
+              <Badge className="bg-warning/15 text-warning-foreground hover:bg-warning/20">待配置</Badge>
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <p className="font-medium">快递 100</p>
+                <p className="text-xs text-muted-foreground">国内段通用查询</p>
+              </div>
+              <Badge className="bg-success/10 text-success hover:bg-success/15">已连接</Badge>
+            </div>
           </CardContent>
         </Card>
       </div>
