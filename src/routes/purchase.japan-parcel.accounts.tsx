@@ -54,8 +54,6 @@ function AccountsPage() {
   const create = useServerFn(createMerukiAccount);
   const update = useServerFn(updateMerukiAccount);
   const del = useServerFn(deleteMerukiAccount);
-  const test = useServerFn(testMerukiLogin);
-  const sync = useServerFn(syncMerukiOrders);
   const fetchRuns = useServerFn(listSyncRuns);
 
   const accounts = useQuery({ queryKey: ["meruki-accounts"], queryFn: () => fetchAccounts() });
@@ -102,27 +100,37 @@ function AccountsPage() {
     },
   });
 
-  const testMut = useMutation({
-    mutationFn: (id: string) => test({ data: { id } }),
-    onSuccess: (r) => {
-      r.ok ? toast.success("Cookie 有效，可以同步") : toast.error(r.reason ?? "Cookie 无效");
-      qc.invalidateQueries({ queryKey: ["meruki-accounts"] });
-    },
-  });
-
-  const syncMut = useMutation({
-    mutationFn: (id: string) => sync({ data: { id } }),
-    onSuccess: (r) => {
-      r.ok ? toast.success(`同步完成：${r.fetched}/${r.inserted}/${r.updated}`) : toast.error(r.reason);
-      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
-    },
-  });
-
   const runs = useQuery({
     queryKey: ["meruki-runs", runsFor],
     queryFn: () => fetchRuns({ data: { account_id: runsFor! } }),
     enabled: !!runsFor,
   });
+
+  const copyToken = (token: string) => {
+    if (!token) return;
+    navigator.clipboard.writeText(token).then(
+      () => toast.success("已复制令牌，粘贴到插件 popup"),
+      () => toast.error("复制失败，请手动选择"),
+    );
+  };
+
+  const downloadExtension = () => {
+    fetch("/meruki-ingest-extension.zip")
+      .then((res) => {
+        if (!res.ok) throw new Error(`下载失败：HTTP ${res.status}`);
+        return res.blob();
+      })
+      .then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "meruki-ingest-extension.zip";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+      })
+      .catch((err) => toast.error((err as Error).message));
+  };
 
   const rows = accounts.data?.rows ?? [];
 
