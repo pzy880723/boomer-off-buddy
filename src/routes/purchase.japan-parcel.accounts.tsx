@@ -143,7 +143,8 @@ function AccountsPage() {
                   </div>
                   <div className="grid gap-1.5">
                     <Label>Cookie（兜底，可选）</Label>
-                    <Textarea rows={3} value={form.cookie} onChange={(e) => setForm({ ...form, cookie: e.target.value })} placeholder="在浏览器登录 meruki 后复制 document.cookie 粘贴" />
+                    <Textarea rows={3} value={form.cookie} onChange={(e) => setForm({ ...form, cookie: e.target.value })} placeholder="在 meruki 页面控制台执行 copy(document.cookie) 后粘贴" />
+                    <p className="text-xs text-muted-foreground">推荐：F12 → Console 输入 <code className="rounded bg-muted px-1">copy(document.cookie)</code> 回车，再粘贴到此处。也支持直接粘贴 DevTools「Application → Cookies」表格。</p>
                   </div>
                 </div>
                 <DialogFooter>
