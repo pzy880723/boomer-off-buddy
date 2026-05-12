@@ -4,15 +4,12 @@
   if (window.__BOOMEROFF_MERUKI_INJECTED__) return;
   window.__BOOMEROFF_MERUKI_INJECTED__ = true;
 
-  // URL path filter: keep this generous so we capture as much as possible.
-  // The backend decides what looks like an order list.
-  const URL_RE = /(order|parcel|package|inProgress|in_progress|buy|purchase|warehouse|cart|deliver|tracking)/i;
+  const MAX_BYTES = 500_000; // skip very large payloads
 
-  function looksInteresting(url) {
+  function isMeruki(url) {
     try {
       const u = new URL(url, location.href);
-      if (!/meruki\.cn$/i.test(u.hostname) && !u.hostname.endsWith(".meruki.cn")) return false;
-      return URL_RE.test(u.pathname + u.search);
+      return /(^|\.)meruki\.cn$/i.test(u.hostname);
     } catch {
       return false;
     }
@@ -29,8 +26,17 @@
     }
   }
 
+  function notifyCaptured() {
+    try {
+      window.postMessage({ __boomeroff: true, type: "meruki-captured-tick" }, "*");
+    } catch {
+      /* ignore */
+    }
+  }
+
   function tryParse(text) {
     if (!text || typeof text !== "string") return null;
+    if (text.length > MAX_BYTES) return null;
     const t = text.trimStart();
     if (t[0] !== "{" && t[0] !== "[") return null;
     try {
@@ -46,15 +52,18 @@
     const res = await origFetch.apply(this, arguments);
     try {
       const url = typeof input === "string" ? input : input?.url ?? "";
-      if (looksInteresting(url)) {
+      if (isMeruki(url)) {
         const ct = res.headers.get("content-type") || "";
-        if (ct.includes("json") || ct === "") {
+        if (ct.includes("json") || ct === "" || ct.includes("text")) {
           const clone = res.clone();
           clone
             .text()
             .then((txt) => {
               const data = tryParse(txt);
-              if (data) send(url, data);
+              if (data) {
+                notifyCaptured();
+                send(url, data);
+              }
             })
             .catch(() => {});
         }
@@ -77,10 +86,14 @@
     };
     xhr.addEventListener("load", function () {
       try {
-        if (!looksInteresting(_url)) return;
-        const txt = xhr.responseType === "" || xhr.responseType === "text" ? xhr.responseText : null;
+        if (!isMeruki(_url)) return;
+        const txt =
+          xhr.responseType === "" || xhr.responseType === "text" ? xhr.responseText : null;
         const data = tryParse(txt);
-        if (data) send(_url, data);
+        if (data) {
+          notifyCaptured();
+          send(_url, data);
+        }
       } catch {
         /* ignore */
       }
