@@ -1,29 +1,55 @@
-# 增强 Cookie 输入容错
+## 目标
 
-## 问题
+把 meruki 抓取从"伪装登录 + HTML 解析"改成"用户粘贴 Cookie + 直接调 meruki 真实 JSON 接口"，让同步真正能跑通。
 
-用户从 Chrome DevTools 的 **Application → Cookies 表格** 整片复制粘贴时，得到的是制表符/换行分隔的多列文本（Name、Value、Domain、Path、Expires、Size、Priority），不是合法的 HTTP `Cookie` 请求头格式。直接塞进 `fetch` 的 headers 触发 `Headers.append: "..." is an invalid header value`，账号添加失败。
+## 你需要先做的事（关键，没有这步我做不下去）
 
-## 修复方案
+请在已登录的 meruki 浏览器窗口里：
 
-在 `src/lib/meruki.server.ts` 加一个 `normalizeCookieInput(raw: string): string` 工具，在所有用到 cookie 的地方（登录测试 / 同步 / 保存）都先经过它。
+1. F12 打开开发者工具 → 切到 **Network** 面板 → 勾选 **Fetch/XHR** 过滤
+2. 在 meruki 站点点开"**进行中的订单**"页面（或刷新一下）
+3. 找到返回订单列表 JSON 的那条请求（通常 URL 里带 `order`、`list`、`inProgress` 之类关键字，Response 里能看到订单数据）
+4. 在那条请求上 **右键 → Copy → Copy as cURL (bash)**，粘贴给我
 
-规则按优先级判断：
+我需要从中拿到：
+- 真实接口 URL 和请求方法（GET/POST）
+- 请求参数（query 或 body，例如分页、状态码）
+- 响应 JSON 的字段结构（订单号、标题、图片、卖家、价格、状态、仓库等）
 
-1. **已是标准格式**：内容里出现 `name=value` 且没有大量换行 → 去掉首尾空白后直接返回（仅过滤掉控制字符 `\r\n\t` → 替换成空格 / `; `）。
-2. **DevTools 表格格式**：含多个换行，按行 split。每行按制表符或 2+ 空格 split → 取前两列 `name` `value`。跳过：表头行（`Name`/`Value`）、空行、name 包含空格、value 是日期串（带 `T` 和 `Z` 的 ISO）、value 是纯数字（很可能是 Size 列被错位读到）。
-3. **JSON 格式**：以 `[` 开头能解析为数组且每项有 `name`+`value` → 取这两个字段。
-4. 拼接成 `name1=value1; name2=value2` 返回；如果一个有效项都没有，抛出友好错误：`Cookie 解析失败：请在 meruki 页面控制台执行 copy(document.cookie) 后粘贴`。
-5. 最后做一次合法性校验：每个 name 必须匹配 `^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$`，value 不允许出现 `\r\n`，否则丢弃该项。
+如果有多个相关接口（比如列表 + 详情），都给我。
 
-## UI 提示
+## 我会做的代码改动
 
-`src/routes/purchase.japan-parcel.accounts.tsx` 里 Cookie 输入框下方的 helper 文案改成：
+### 1. `src/lib/meruki.server.ts`
+- 新增 `fetchInProgressOrdersApi(cookie)`：直接 `fetch` 你给的 JSON 接口，带上必要的 Header（`Cookie`、`Referer`、`User-Agent`、可能的 `X-Requested-With` / `Content-Type`）
+- 用 `response.json()` 取数，按真实字段映射到我们的 `ScrapedParcel`
+- 保留旧的 `fetchInProgressOrders`（HTML 版）作为 fallback，但默认不走
+- HTTP 非 2xx 或返回 `code != 0` / `登录失效` 时，抛出明确错误："Cookie 已失效，请到账号管理重新粘贴"
 
-> 在 meruki 页面按 F12 → Console 输入 `copy(document.cookie)` 回车，再粘贴到这里。也支持直接粘贴 DevTools Cookies 表格。
+### 2. `src/lib/meruki.functions.ts`
+- `syncMerukiOrders` 改为调用新的 JSON 版本
+- **移除 `loginMeruki` 自动登录回退**：Cookie 不存在/失效时不再尝试用密码登录（反正成功不了），直接报错让用户重新粘贴 Cookie
+- 同步失败且原因含"登录失效/未登录"时，把账号 `last_login_status` 标成 `cookie_expired`，前端就能明显提示
 
-## 验证
+### 3. `src/routes/purchase.japan-parcel.accounts.tsx`
+- "新增账号"对话框：把"密码"字段降级为可选/隐藏，主推"用户名 + Cookie"
+- 移除/隐藏"测试登录"按钮（`testMerukiLogin`），改成"测试 Cookie"按钮 —— 直接用当前 Cookie 调一次列表接口，能拿到数据就算 OK
+- 账号列表里 `last_login_status === 'cookie_expired'` 时显示醒目的"Cookie 已失效，点编辑更新"提示
 
-- 粘贴 `a=1; b=2` → 通过
-- 粘贴一段 DevTools 表格文本（即用户这次报错的那段）→ 解析出 `__snaker__id`、`_ga`、`_ga_HP0V8DT7SS`、`deviceId`、`gdxidpyhxdE`、`kmgSessionNO03HxWh` 等键值，拼出合法 Cookie 头，登录测试不再 throw `invalid header value`
-- 粘贴乱七八糟的纯文本 → 抛出友好错误而不是底层 `Headers.append` 报错
+### 4. 字段对齐
+拿到真实 JSON 后，我会把 meruki 的字段（例如 `orderNo`、`goodsName`、`goodsImg`、`sellerName`、`price`、`statusText`、`warehouseName`）映射到我们 `japan_parcels` 表已有的列，并更新 `mapMerukiStatus` 的状态匹配（用真实状态码而不是关键字猜）。
+
+## 不在本次范围内的事
+
+- 自动登录（瑞数风控 + 滑块 + Workers 不能跑 Playwright，做不了，不再尝试）
+- Cookie 自动续期（meruki 没给我们刷新接口，只能用户手动更新）
+- 订单详情抓取（先把列表跑通，详情等列表稳定后再加）
+
+## 验收标准
+
+- 在账号管理粘贴一次有效 Cookie 后，点"立即同步"能在 `japan_parcels` 表里看到真实订单数据
+- Cookie 过期后，同步失败信息明确指向"重新粘贴 Cookie"，不再是 `fetch failed` 这种模糊错误
+
+---
+
+**等你把那条 XHR 的 cURL 贴过来，我就开工。**
