@@ -9,9 +9,19 @@ import {
 } from "./meruki.server";
 import { computeCompleteness } from "./japan-parcel.helpers";
 
-function sanitizeAccount(row: Record<string, unknown>) {
+type AccountRow = Record<string, unknown> & {
+  id: string;
+  username: string;
+  display_name: string | null;
+  last_login_status: string | null;
+  last_login_at: string | null;
+  last_error: string | null;
+  has_cookie: boolean;
+};
+
+function sanitizeAccount(row: Record<string, unknown>): AccountRow {
   const { password_encrypted: _p, session_cookie: _c, ...rest } = row;
-  return { ...rest, has_cookie: !!_c };
+  return { ...(rest as AccountRow), has_cookie: !!_c };
 }
 
 export const listMerukiAccounts = createServerFn({ method: "GET" }).handler(async () => {
