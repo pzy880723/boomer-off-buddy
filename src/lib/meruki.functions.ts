@@ -3,7 +3,6 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   assertCookieHasRequiredFields,
-  decryptPassword,
   encryptPassword,
   fetchInProgressOrders,
   loginMeruki,
