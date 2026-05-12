@@ -38,8 +38,6 @@ import {
   deleteMerukiAccount,
   listMerukiAccounts,
   listSyncRuns,
-  syncMerukiOrders,
-  testMerukiLogin,
   updateMerukiAccount,
 } from "@/lib/meruki.functions";
 
