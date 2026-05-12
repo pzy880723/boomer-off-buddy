@@ -158,20 +158,15 @@ function AccountsPage() {
                     <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label>密码</Label>
-                    <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-                    <p className="text-xs text-muted-foreground">系统会自动尝试登录并缓存 Cookie。如站点要求验证码，请改用下方 Cookie。</p>
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>Cookie（兜底，可选）</Label>
+                    <Label>Cookie *</Label>
                     <Textarea rows={3} value={form.cookie} onChange={(e) => setForm({ ...form, cookie: e.target.value })} placeholder="在 meruki 页面控制台执行 copy(document.cookie) 后粘贴" />
-                    <p className="text-xs text-muted-foreground">推荐：F12 → Console 输入 <code className="rounded bg-muted px-1">copy(document.cookie)</code> 回车，再粘贴到此处。也支持直接粘贴 DevTools「Application → Cookies」表格。</p>
+                    <p className="text-xs text-muted-foreground">F12 → Console 输入 <code className="rounded bg-muted px-1">copy(document.cookie)</code> 回车，再粘贴到此处。meruki 有滑块验证码，无法自动登录，必须手动粘贴 Cookie。</p>
                   </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setOpen(false)}>取消</Button>
-                  <Button onClick={() => createMut.mutate()} disabled={!form.username || (!form.password && !form.cookie) || createMut.isPending}>
-                    {createMut.isPending ? "添加中…" : "添加并测试登录"}
+                  <Button onClick={() => createMut.mutate()} disabled={!form.username || !form.cookie || createMut.isPending}>
+                    {createMut.isPending ? "添加中…" : "添加账号"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
