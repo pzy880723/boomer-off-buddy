@@ -217,7 +217,7 @@ function AccountsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" onClick={() => testMut.mutate(a.id as string)} disabled={testMut.isPending}>
-                        <Zap className="mr-1 h-3.5 w-3.5" /> 测试
+                        <Zap className="mr-1 h-3.5 w-3.5" /> 测试 Cookie
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => syncMut.mutate(a.id as string)} disabled={syncMut.isPending}>
                         <RefreshCw className={`mr-1 h-3.5 w-3.5 ${syncMut.isPending ? "animate-spin" : ""}`} /> 同步
