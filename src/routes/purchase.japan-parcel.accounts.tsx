@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, KeyRound, Plus, RefreshCw, Trash2, Zap, History } from "lucide-react";
+import { ArrowLeft, KeyRound, Pencil, Plus, RefreshCw, Trash2, Zap, History } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,6 +40,7 @@ import {
   listSyncRuns,
   syncMerukiOrders,
   testMerukiLogin,
+  updateMerukiAccount,
 } from "@/lib/meruki.functions";
 
 export const Route = createFileRoute("/purchase/japan-parcel/accounts")({
@@ -51,6 +52,7 @@ function AccountsPage() {
   const qc = useQueryClient();
   const fetchAccounts = useServerFn(listMerukiAccounts);
   const create = useServerFn(createMerukiAccount);
+  const update = useServerFn(updateMerukiAccount);
   const del = useServerFn(deleteMerukiAccount);
   const test = useServerFn(testMerukiLogin);
   const sync = useServerFn(syncMerukiOrders);
@@ -60,6 +62,8 @@ function AccountsPage() {
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ username: "", password: "", cookie: "", display_name: "" });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ password: "", cookie: "", display_name: "" });
   const [runsFor, setRunsFor] = useState<string | null>(null);
 
   const createMut = useMutation({
@@ -68,6 +72,23 @@ function AccountsPage() {
       toast.success(r.warning ? `账号已添加（${r.warning}）` : "账号添加成功");
       setOpen(false);
       setForm({ username: "", password: "", cookie: "", display_name: "" });
+      qc.invalidateQueries({ queryKey: ["meruki-accounts"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: () => {
+      const payload: { id: string; password?: string; cookie?: string; display_name?: string } = { id: editId! };
+      if (editForm.password) payload.password = editForm.password;
+      if (editForm.cookie) payload.cookie = editForm.cookie;
+      if (editForm.display_name) payload.display_name = editForm.display_name;
+      return update({ data: payload });
+    },
+    onSuccess: () => {
+      toast.success("账号已更新");
+      setEditId(null);
+      setEditForm({ password: "", cookie: "", display_name: "" });
       qc.invalidateQueries({ queryKey: ["meruki-accounts"] });
     },
     onError: (e) => toast.error((e as Error).message),
@@ -204,6 +225,12 @@ function AccountsPage() {
                       <Button variant="ghost" size="sm" onClick={() => syncMut.mutate(a.id as string)} disabled={syncMut.isPending}>
                         <RefreshCw className={`mr-1 h-3.5 w-3.5 ${syncMut.isPending ? "animate-spin" : ""}`} /> 同步
                       </Button>
+                      <Button variant="ghost" size="sm" onClick={() => {
+                        setEditId(a.id as string);
+                        setEditForm({ password: "", cookie: "", display_name: (a.display_name as string) ?? "" });
+                      }}>
+                        <Pencil className="mr-1 h-3.5 w-3.5" /> 编辑
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => setRunsFor(a.id as string)}>
                         <History className="mr-1 h-3.5 w-3.5" /> 日志
                       </Button>
@@ -240,6 +267,33 @@ function AccountsPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={!!editId} onOpenChange={(v) => { if (!v) { setEditId(null); setEditForm({ password: "", cookie: "", display_name: "" }); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>编辑 Meruki 账号</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label>备注名</Label>
+              <Input value={editForm.display_name} onChange={(e) => setEditForm({ ...editForm, display_name: e.target.value })} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>新密码（留空表示不修改）</Label>
+              <Input type="password" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>更新 Cookie（留空表示不修改）</Label>
+              <Textarea rows={3} value={editForm.cookie} onChange={(e) => setEditForm({ ...editForm, cookie: e.target.value })} placeholder="在 meruki 页面控制台执行 copy(document.cookie) 后粘贴" />
+              <p className="text-xs text-muted-foreground">Cookie 过期后在这里粘贴新 Cookie 即可，无需删除账号。</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditId(null)}>取消</Button>
+            <Button onClick={() => updateMut.mutate()} disabled={updateMut.isPending || (!editForm.password && !editForm.cookie && !editForm.display_name)}>
+              {updateMut.isPending ? "保存中…" : "保存"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
