@@ -110,7 +110,7 @@ function normalizeOrder(o: Record<string, unknown>) {
     warehouse_location: warehouse,
     status: mapStatus(statusRaw),
     notes: statusRaw,
-    raw_payload: o as object,
+    raw_payload: o as unknown as Record<string, unknown>,
   };
 }
 

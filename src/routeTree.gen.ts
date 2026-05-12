@@ -27,6 +27,7 @@ import { Route as PurchaseJapanParcelIndexRouteImport } from './routes/purchase.
 import { Route as PurchaseJapanParcelNewRouteImport } from './routes/purchase.japan-parcel.new'
 import { Route as PurchaseJapanParcelAccountsRouteImport } from './routes/purchase.japan-parcel.accounts'
 import { Route as PurchaseJapanParcelIdRouteImport } from './routes/purchase.japan-parcel.$id'
+import { Route as ApiPublicMerukiIngestRouteImport } from './routes/api/public/meruki-ingest'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -120,6 +121,11 @@ const PurchaseJapanParcelIdRoute = PurchaseJapanParcelIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => PurchaseJapanParcelRoute,
 } as any)
+const ApiPublicMerukiIngestRoute = ApiPublicMerukiIngestRouteImport.update({
+  id: '/api/public/meruki-ingest',
+  path: '/api/public/meruki-ingest',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -136,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/stores/franchisees': typeof StoresFranchiseesRoute
   '/stores/list': typeof StoresListRoute
   '/stores/youzan': typeof StoresYouzanRoute
+  '/api/public/meruki-ingest': typeof ApiPublicMerukiIngestRoute
   '/purchase/japan-parcel/$id': typeof PurchaseJapanParcelIdRoute
   '/purchase/japan-parcel/accounts': typeof PurchaseJapanParcelAccountsRoute
   '/purchase/japan-parcel/new': typeof PurchaseJapanParcelNewRoute
@@ -155,6 +162,7 @@ export interface FileRoutesByTo {
   '/stores/franchisees': typeof StoresFranchiseesRoute
   '/stores/list': typeof StoresListRoute
   '/stores/youzan': typeof StoresYouzanRoute
+  '/api/public/meruki-ingest': typeof ApiPublicMerukiIngestRoute
   '/purchase/japan-parcel/$id': typeof PurchaseJapanParcelIdRoute
   '/purchase/japan-parcel/accounts': typeof PurchaseJapanParcelAccountsRoute
   '/purchase/japan-parcel/new': typeof PurchaseJapanParcelNewRoute
@@ -176,6 +184,7 @@ export interface FileRoutesById {
   '/stores/franchisees': typeof StoresFranchiseesRoute
   '/stores/list': typeof StoresListRoute
   '/stores/youzan': typeof StoresYouzanRoute
+  '/api/public/meruki-ingest': typeof ApiPublicMerukiIngestRoute
   '/purchase/japan-parcel/$id': typeof PurchaseJapanParcelIdRoute
   '/purchase/japan-parcel/accounts': typeof PurchaseJapanParcelAccountsRoute
   '/purchase/japan-parcel/new': typeof PurchaseJapanParcelNewRoute
@@ -198,6 +207,7 @@ export interface FileRouteTypes {
     | '/stores/franchisees'
     | '/stores/list'
     | '/stores/youzan'
+    | '/api/public/meruki-ingest'
     | '/purchase/japan-parcel/$id'
     | '/purchase/japan-parcel/accounts'
     | '/purchase/japan-parcel/new'
@@ -217,6 +227,7 @@ export interface FileRouteTypes {
     | '/stores/franchisees'
     | '/stores/list'
     | '/stores/youzan'
+    | '/api/public/meruki-ingest'
     | '/purchase/japan-parcel/$id'
     | '/purchase/japan-parcel/accounts'
     | '/purchase/japan-parcel/new'
@@ -237,6 +248,7 @@ export interface FileRouteTypes {
     | '/stores/franchisees'
     | '/stores/list'
     | '/stores/youzan'
+    | '/api/public/meruki-ingest'
     | '/purchase/japan-parcel/$id'
     | '/purchase/japan-parcel/accounts'
     | '/purchase/japan-parcel/new'
@@ -258,6 +270,7 @@ export interface RootRouteChildren {
   StoresFranchiseesRoute: typeof StoresFranchiseesRoute
   StoresListRoute: typeof StoresListRoute
   StoresYouzanRoute: typeof StoresYouzanRoute
+  ApiPublicMerukiIngestRoute: typeof ApiPublicMerukiIngestRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -388,6 +401,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PurchaseJapanParcelIdRouteImport
       parentRoute: typeof PurchaseJapanParcelRoute
     }
+    '/api/public/meruki-ingest': {
+      id: '/api/public/meruki-ingest'
+      path: '/api/public/meruki-ingest'
+      fullPath: '/api/public/meruki-ingest'
+      preLoaderRoute: typeof ApiPublicMerukiIngestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -423,6 +443,7 @@ const rootRouteChildren: RootRouteChildren = {
   StoresFranchiseesRoute: StoresFranchiseesRoute,
   StoresListRoute: StoresListRoute,
   StoresYouzanRoute: StoresYouzanRoute,
+  ApiPublicMerukiIngestRoute: ApiPublicMerukiIngestRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
