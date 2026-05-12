@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, KeyRound, Pencil, Plus, RefreshCw, Trash2, Zap, History } from "lucide-react";
+import { ArrowLeft, KeyRound, Pencil, Plus, Trash2, History, Download, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,8 +38,6 @@ import {
   deleteMerukiAccount,
   listMerukiAccounts,
   listSyncRuns,
-  syncMerukiOrders,
-  testMerukiLogin,
   updateMerukiAccount,
 } from "@/lib/meruki.functions";
 
@@ -54,8 +52,6 @@ function AccountsPage() {
   const create = useServerFn(createMerukiAccount);
   const update = useServerFn(updateMerukiAccount);
   const del = useServerFn(deleteMerukiAccount);
-  const test = useServerFn(testMerukiLogin);
-  const sync = useServerFn(syncMerukiOrders);
   const fetchRuns = useServerFn(listSyncRuns);
 
   const accounts = useQuery({ queryKey: ["meruki-accounts"], queryFn: () => fetchAccounts() });
@@ -102,27 +98,37 @@ function AccountsPage() {
     },
   });
 
-  const testMut = useMutation({
-    mutationFn: (id: string) => test({ data: { id } }),
-    onSuccess: (r) => {
-      r.ok ? toast.success("Cookie 有效，可以同步") : toast.error(r.reason ?? "Cookie 无效");
-      qc.invalidateQueries({ queryKey: ["meruki-accounts"] });
-    },
-  });
-
-  const syncMut = useMutation({
-    mutationFn: (id: string) => sync({ data: { id } }),
-    onSuccess: (r) => {
-      r.ok ? toast.success(`同步完成：${r.fetched}/${r.inserted}/${r.updated}`) : toast.error(r.reason);
-      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
-    },
-  });
-
   const runs = useQuery({
     queryKey: ["meruki-runs", runsFor],
     queryFn: () => fetchRuns({ data: { account_id: runsFor! } }),
     enabled: !!runsFor,
   });
+
+  const copyToken = (token: string) => {
+    if (!token) return;
+    navigator.clipboard.writeText(token).then(
+      () => toast.success("已复制令牌，粘贴到插件 popup"),
+      () => toast.error("复制失败，请手动选择"),
+    );
+  };
+
+  const downloadExtension = () => {
+    fetch("/meruki-ingest-extension.zip")
+      .then((res) => {
+        if (!res.ok) throw new Error(`下载失败：HTTP ${res.status}`);
+        return res.blob();
+      })
+      .then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "meruki-ingest-extension.zip";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+      })
+      .catch((err) => toast.error((err as Error).message));
+  };
 
   const rows = accounts.data?.rows ?? [];
 
@@ -175,6 +181,24 @@ function AccountsPage() {
         }
       />
 
+      <Card className="mb-4 border-dashed">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <Download className="mt-0.5 h-5 w-5 text-primary" />
+            <div className="flex-1">
+              <div className="font-medium">浏览器插件（推荐方式）</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                安装插件后，打开 meruki 任意订单页面即可自动上报，无需粘贴 Cookie。
+                安装步骤：下载 → 解压 → 打开 <code className="rounded bg-muted px-1">chrome://extensions</code> → 开启「开发者模式」→ 点「加载已解压的扩展程序」选解压后的文件夹 → 点插件图标，把下方账号的「插件令牌」粘进去保存。
+              </p>
+            </div>
+            <Button size="sm" onClick={downloadExtension}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> 下载插件
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="p-0">
           {accounts.isLoading ? (
@@ -186,8 +210,9 @@ function AccountsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>账号</TableHead>
-                  <TableHead>登录状态</TableHead>
-                  <TableHead>最后登录</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead>插件令牌</TableHead>
+                  <TableHead>最后上报</TableHead>
                   <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
@@ -205,23 +230,21 @@ function AccountsPage() {
                         a.last_login_status === "captcha" ? "bg-amber-50 text-amber-700" :
                         a.last_login_status === "failed" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"
                       }`}>
-                        {a.last_login_status === "ok" ? "✓ Cookie 有效" :
-                         a.last_login_status === "cookie_expired" ? "Cookie 已失效，点编辑更新" :
-                         a.last_login_status === "captcha" ? "需验证码" :
-                         a.last_login_status === "failed" ? "失败" : "未测试"}
+                        {a.last_login_status === "ok" ? "✓ 有数据" :
+                         a.last_login_status === "cookie_expired" ? "等待插件上报" :
+                         a.last_login_status === "failed" ? "失败" : "未上报"}
                       </span>
                       {a.last_error ? <div className="mt-1 text-xs text-muted-foreground">{a.last_error as string}</div> : null}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="outline" size="sm" className="font-mono text-xs" onClick={() => copyToken(a.ingest_token)}>
+                        <Copy className="mr-1 h-3 w-3" /> {a.ingest_token ? a.ingest_token.slice(0, 8) + "…" : "—"}
+                      </Button>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {a.last_login_at ? new Date(a.last_login_at as string).toLocaleString() : "—"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => testMut.mutate(a.id as string)} disabled={testMut.isPending}>
-                        <Zap className="mr-1 h-3.5 w-3.5" /> 测试 Cookie
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => syncMut.mutate(a.id as string)} disabled={syncMut.isPending}>
-                        <RefreshCw className={`mr-1 h-3.5 w-3.5 ${syncMut.isPending ? "animate-spin" : ""}`} /> 同步
-                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => {
                         setEditId(a.id as string);
                         setEditForm({ password: "", cookie: "", display_name: (a.display_name as string) ?? "" });

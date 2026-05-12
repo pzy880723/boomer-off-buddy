@@ -121,6 +121,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          ingest_token: string
           last_error: string | null
           last_login_at: string | null
           last_login_status: string | null
@@ -134,6 +135,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          ingest_token?: string
           last_error?: string | null
           last_login_at?: string | null
           last_login_status?: string | null
@@ -147,6 +149,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          ingest_token?: string
           last_error?: string | null
           last_login_at?: string | null
           last_login_status?: string | null

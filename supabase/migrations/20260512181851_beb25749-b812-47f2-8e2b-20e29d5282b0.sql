@@ -1,0 +1,2 @@
+ALTER TABLE public.meruki_accounts ADD COLUMN IF NOT EXISTS ingest_token uuid NOT NULL DEFAULT gen_random_uuid();
+CREATE UNIQUE INDEX IF NOT EXISTS meruki_accounts_ingest_token_idx ON public.meruki_accounts(ingest_token);

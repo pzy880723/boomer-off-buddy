@@ -21,6 +21,7 @@ export interface AccountRow {
   created_at: string;
   updated_at: string;
   has_cookie: boolean;
+  ingest_token: string;
 }
 
 function sanitizeAccount(row: Record<string, unknown>): AccountRow {
@@ -35,6 +36,7 @@ function sanitizeAccount(row: Record<string, unknown>): AccountRow {
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     has_cookie: !!row.session_cookie,
+    ingest_token: (row.ingest_token as string | null) ?? "",
   };
 }
 

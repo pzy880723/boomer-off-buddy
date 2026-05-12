@@ -1,55 +1,78 @@
-## 目标
+## 思路
 
-把 meruki 抓取从"伪装登录 + HTML 解析"改成"用户粘贴 Cookie + 直接调 meruki 真实 JSON 接口"，让同步真正能跑通。
+做一个浏览器插件，**当你打开 meruki 任意页面时，它在后台静默抓取所有订单相关的 JSON 响应，自动 POST 到我们系统**。你不用找接口、不用粘 Cookie、不用手动同步——打开页面就完事。
 
-## 你需要先做的事（关键，没有这步我做不下去）
+```text
+[meruki 页面]
+     │  浏览器自然加载订单 JSON
+     ▼
+[Chrome 插件 content script]  ← 拦截 fetch/XHR
+     │  挑出 url 含 order/list/parcel 的 JSON 响应
+     ▼
+POST  https://<你的项目>.lovable.app/api/public/meruki-ingest
+      Header: X-Ingest-Secret: <共享密钥>
+      Body:   { account_id, source_url, payload }
+     │
+     ▼
+[后端] 入库 japan_parcels（raw_payload 全存，字段尽力映射）
+```
 
-请在已登录的 meruki 浏览器窗口里：
+## 我会做的事
 
-1. F12 打开开发者工具 → 切到 **Network** 面板 → 勾选 **Fetch/XHR** 过滤
-2. 在 meruki 站点点开"**进行中的订单**"页面（或刷新一下）
-3. 找到返回订单列表 JSON 的那条请求（通常 URL 里带 `order`、`list`、`inProgress` 之类关键字，Response 里能看到订单数据）
-4. 在那条请求上 **右键 → Copy → Copy as cURL (bash)**，粘贴给我
+### 1. 数据库（migration）
+- `meruki_accounts` 表：新增 `ingest_token`（uuid），用于插件按账号绑定上报。每个账号一个唯一 token。
+- `japan_parcels` 表：已有 `raw_payload jsonb`，复用即可。
 
-我需要从中拿到：
-- 真实接口 URL 和请求方法（GET/POST）
-- 请求参数（query 或 body，例如分页、状态码）
-- 响应 JSON 的字段结构（订单号、标题、图片、卖家、价格、状态、仓库等）
+### 2. 后端公开接口 `src/routes/api/public/meruki-ingest.ts`
+- `POST` 接收 `{ ingest_token, source_url, payload }`
+- 用 `ingest_token` 反查 `account_id`，token 不存在直接 401
+- 把 `payload` 整体存进 `japan_parcels.raw_payload`，并尽力解析常见字段（`orderNo/orderId/itemTitle/price/img/seller/status` 等），按 `(account_id, source_order_no)` upsert
+- 写一条 `meruki_sync_runs` 记录，状态 success / fetched_count
+- **新格式不认识也不报错** —— 全量原始数据已存，后续再加映射
 
-如果有多个相关接口（比如列表 + 详情），都给我。
+### 3. Chrome 插件（放在 `extension/` 目录）
+文件结构：
+```text
+extension/
+├── manifest.json          # MV3，permissions: storage, scripting, host: https://*.meruki.cn/*
+├── content.js             # 注入到 meruki 页面
+├── inject.js              # 真正在页面上下文里 patch fetch+XHR（content script 拿不到响应体，必须 inject）
+├── popup.html / popup.js  # 设置：API 基地址 + ingest_token
+├── background.js          # 转发 inject → fetch 上报（绕过 CORS）
+└── icon.png
+```
 
-## 我会做的代码改动
+工作流程：
+1. `inject.js` 在 meruki 页面里 monkey-patch `window.fetch` 和 `XMLHttpRequest`
+2. 响应是 JSON 且 URL 路径匹配 `/order|parcel|package|inProgress|buy/i` → 把 `{url, body}` 通过 `window.postMessage` 发给 content script
+3. content script 转发给 background service worker
+4. background 用配置好的 token POST 到我们的 `/api/public/meruki-ingest`
+5. popup 显示"今天已上报 N 条 / 上次成功时间"
 
-### 1. `src/lib/meruki.server.ts`
-- 新增 `fetchInProgressOrdersApi(cookie)`：直接 `fetch` 你给的 JSON 接口，带上必要的 Header（`Cookie`、`Referer`、`User-Agent`、可能的 `X-Requested-With` / `Content-Type`）
-- 用 `response.json()` 取数，按真实字段映射到我们的 `ScrapedParcel`
-- 保留旧的 `fetchInProgressOrders`（HTML 版）作为 fallback，但默认不走
-- HTTP 非 2xx 或返回 `code != 0` / `登录失效` 时，抛出明确错误："Cookie 已失效，请到账号管理重新粘贴"
+### 4. 打包 + 下载
+- 用 `nix run nixpkgs#zip` 打包到 `public/meruki-ingest-extension.zip`
+- 在 `accounts.tsx` 顶部加一张卡片：
+  - "下载浏览器插件"按钮（fetch+blob 触发下载）
+  - 4 步安装说明（解压 → chrome://extensions → 开发者模式 → 加载已解压扩展程序）
+  - 每个账号行多一列「上报令牌」，点一下复制，让用户粘到插件 popup 里
 
-### 2. `src/lib/meruki.functions.ts`
-- `syncMerukiOrders` 改为调用新的 JSON 版本
-- **移除 `loginMeruki` 自动登录回退**：Cookie 不存在/失效时不再尝试用密码登录（反正成功不了），直接报错让用户重新粘贴 Cookie
-- 同步失败且原因含"登录失效/未登录"时，把账号 `last_login_status` 标成 `cookie_expired`，前端就能明显提示
+### 5. UI 调整
+- "测试 Cookie"和"立即同步"按钮隐藏（不再需要 Cookie 路径，但保留代码以防回退）
+- 同步状态新增一行说明："请保持插件已安装，并定期打开 meruki 进行中订单页"
+- "新增账号"对话框去掉 Cookie 必填，改回只要用户名 + 备注名即可
 
-### 3. `src/routes/purchase.japan-parcel.accounts.tsx`
-- "新增账号"对话框：把"密码"字段降级为可选/隐藏，主推"用户名 + Cookie"
-- 移除/隐藏"测试登录"按钮（`testMerukiLogin`），改成"测试 Cookie"按钮 —— 直接用当前 Cookie 调一次列表接口，能拿到数据就算 OK
-- 账号列表里 `last_login_status === 'cookie_expired'` 时显示醒目的"Cookie 已失效，点编辑更新"提示
+## 不在本次范围
 
-### 4. 字段对齐
-拿到真实 JSON 后，我会把 meruki 的字段（例如 `orderNo`、`goodsName`、`goodsImg`、`sellerName`、`price`、`statusText`、`warehouseName`）映射到我们 `japan_parcels` 表已有的列，并更新 `mapMerukiStatus` 的状态匹配（用真实状态码而不是关键字猜）。
-
-## 不在本次范围内的事
-
-- 自动登录（瑞数风控 + 滑块 + Workers 不能跑 Playwright，做不了，不再尝试）
-- Cookie 自动续期（meruki 没给我们刷新接口，只能用户手动更新）
-- 订单详情抓取（先把列表跑通，详情等列表稳定后再加）
+- Cookie 抓取路径（保留代码，但 UI 不主推）
+- 订单详情页深度抓取（v2 再加，先把列表跑稳）
+- 自动定时拉取（meruki 必须用户主动打开页面才会触发；插件本身不能后台访问 meruki）
 
 ## 验收标准
 
-- 在账号管理粘贴一次有效 Cookie 后，点"立即同步"能在 `japan_parcels` 表里看到真实订单数据
-- Cookie 过期后，同步失败信息明确指向"重新粘贴 Cookie"，不再是 `fetch failed` 这种模糊错误
+1. 用户在系统里：新增账号 → 复制上报令牌 → 装插件 → 把令牌粘到 popup
+2. 用户打开 meruki "进行中订单"页面 → 几秒后系统订单列表自动出现新数据
+3. 失败时插件 popup 显示原因（401 token 错、网络错等），系统日志页能看到失败的 sync run
 
 ---
 
-**等你把那条 XHR 的 cURL 贴过来，我就开工。**
+要我按这个开干吗？需要你确认一件事：**插件抓到数据的"上报终点"该用哪个 URL？** 我建议用 `https://project--2158bffa-7f82-4bc6-9df9-c59319d262f7.lovable.app`（稳定的预览地址），等你正式发布后我再让插件支持自定义 baseUrl。
