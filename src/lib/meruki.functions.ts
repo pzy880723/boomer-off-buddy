@@ -144,6 +144,8 @@ export const deleteMerukiAccount = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// "测试 Cookie"：用账号当前的 session_cookie 实际请求一次订单接口，
+// 拿到数据就算 OK。比假登录更可靠，也是 Cookie 是否过期的真实判定。
 export const testMerukiLogin = createServerFn({ method: "POST" })
   .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
@@ -153,18 +155,36 @@ export const testMerukiLogin = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .single();
     if (error) throw new Error(error.message);
-    const password = await decryptPassword(acc.password_encrypted);
-    const r = await loginMeruki(acc.username, password);
-    await supabaseAdmin
-      .from("meruki_accounts")
-      .update({
-        last_login_status: r.ok ? "ok" : r.needsCaptcha ? "captcha" : "failed",
-        last_login_at: r.ok ? new Date().toISOString() : acc.last_login_at,
-        last_error: r.reason ?? null,
-        session_cookie: r.cookie ?? acc.session_cookie,
-      })
-      .eq("id", data.id);
-    return { ok: r.ok, reason: r.reason };
+    if (!acc.session_cookie) {
+      await supabaseAdmin
+        .from("meruki_accounts")
+        .update({ last_login_status: "cookie_expired", last_error: "未粘贴 Cookie" })
+        .eq("id", data.id);
+      return { ok: false, reason: "未粘贴 Cookie，请先在编辑里粘贴" };
+    }
+    try {
+      await fetchInProgressOrders(acc.session_cookie as string);
+      await supabaseAdmin
+        .from("meruki_accounts")
+        .update({
+          last_login_status: "ok",
+          last_login_at: new Date().toISOString(),
+          last_error: null,
+        })
+        .eq("id", data.id);
+      return { ok: true };
+    } catch (e) {
+      const msg = (e as Error).message;
+      const expired = /401|403|登录|未登录|登陆|失效|sign in|unauth/i.test(msg);
+      await supabaseAdmin
+        .from("meruki_accounts")
+        .update({
+          last_login_status: expired ? "cookie_expired" : "failed",
+          last_error: msg,
+        })
+        .eq("id", data.id);
+      return { ok: false, reason: expired ? "Cookie 已失效，请重新粘贴" : msg };
+    }
   });
 
 export const syncMerukiOrders = createServerFn({ method: "POST" })
