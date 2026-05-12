@@ -19,8 +19,6 @@ import {
   CartesianGrid,
   Cell,
   Legend,
-  Line,
-  LineChart,
   Pie,
   PieChart,
   RadialBar,
@@ -358,6 +356,4 @@ function DashboardPage() {
     </div>
   );
 }
-// silence unused
-void LineChart;
-void Line;
+
