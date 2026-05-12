@@ -1,6 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Building2, Users, Bell, Plug, Webhook, Key, History } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 
 export const Route = createFileRoute("/settings")({
@@ -8,39 +14,210 @@ export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
-function Placeholder({ title }: { title: string }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="border-2 border-dashed rounded-md py-16 text-center text-muted-foreground text-sm">
-          即将推出
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function SettingsPage() {
   return (
     <div>
-      <PageHeader title="系统设置" description="角色权限、数据字典与系统日志管理" />
-      <Tabs defaultValue="roles">
-        <TabsList>
-          <TabsTrigger value="roles">角色权限</TabsTrigger>
-          <TabsTrigger value="dict">数据字典</TabsTrigger>
-          <TabsTrigger value="logs">操作日志</TabsTrigger>
+      <PageHeader title="系统设置" description="账户、通知、集成与安全策略管理" />
+      <Tabs defaultValue="profile" className="gap-4">
+        <TabsList className="flex-wrap">
+          <TabsTrigger value="profile" className="gap-1.5">
+            <Building2 className="h-3.5 w-3.5" />
+            基本信息
+          </TabsTrigger>
+          <TabsTrigger value="members" className="gap-1.5">
+            <Users className="h-3.5 w-3.5" />
+            成员权限
+          </TabsTrigger>
+          <TabsTrigger value="notify" className="gap-1.5">
+            <Bell className="h-3.5 w-3.5" />
+            通知
+          </TabsTrigger>
+          <TabsTrigger value="integration" className="gap-1.5">
+            <Plug className="h-3.5 w-3.5" />
+            集成
+          </TabsTrigger>
+          <TabsTrigger value="webhook" className="gap-1.5">
+            <Webhook className="h-3.5 w-3.5" />
+            Webhook
+          </TabsTrigger>
+          <TabsTrigger value="api" className="gap-1.5">
+            <Key className="h-3.5 w-3.5" />
+            API 密钥
+          </TabsTrigger>
+          <TabsTrigger value="audit" className="gap-1.5">
+            <History className="h-3.5 w-3.5" />
+            审计日志
+          </TabsTrigger>
         </TabsList>
-        <TabsContent value="roles" className="mt-4">
-          <Placeholder title="角色与权限管理" />
+
+        <TabsContent value="profile">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">品牌基本信息</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>品牌名称</Label>
+                <Input defaultValue="BOOMER OFF · vintage group" />
+              </div>
+              <div className="space-y-2">
+                <Label>统一社会信用代码</Label>
+                <Input defaultValue="91310000XXXXXXXXXX" />
+              </div>
+              <div className="space-y-2">
+                <Label>注册地址</Label>
+                <Input defaultValue="上海市徐汇区安福路 322 号" />
+              </div>
+              <div className="space-y-2">
+                <Label>客服热线</Label>
+                <Input defaultValue="400-888-XXXX" />
+              </div>
+              <div className="md:col-span-2 flex justify-end">
+                <Button className="bg-gradient-brand hover:opacity-90">保存修改</Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
-        <TabsContent value="dict" className="mt-4">
-          <Placeholder title="数据字典维护" />
+
+        <TabsContent value="members">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">成员与权限</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {[
+                  { name: "管理员", role: "超级管理员", count: 1, color: "brand" },
+                  { name: "采购组", role: "采购员", count: 4, color: "info" },
+                  { name: "运营组", role: "运营专员", count: 6, color: "info" },
+                  { name: "门店店长", role: "门店权限", count: 12, color: "muted" },
+                ].map((g) => (
+                  <div key={g.name} className="flex items-center justify-between rounded-md border p-3">
+                    <div>
+                      <p className="font-medium">{g.name}</p>
+                      <p className="text-xs text-muted-foreground">{g.role}</p>
+                    </div>
+                    <Badge variant="secondary">{g.count} 人</Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
-        <TabsContent value="logs" className="mt-4">
-          <Placeholder title="系统操作日志" />
+
+        <TabsContent value="notify">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">通知偏好</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                { label: "库存预警通知", desc: "门店库存低于阈值时推送" },
+                { label: "包裹清关完成通知", desc: "海关放行后立即推送" },
+                { label: "批次回本通知", desc: "采购批次达到 100% 回本时推送" },
+                { label: "异常订单通知", desc: "退款、纠纷等异常订单实时推送" },
+              ].map((n) => (
+                <div key={n.label} className="flex items-center justify-between border-b pb-3 last:border-0">
+                  <div>
+                    <p className="text-sm font-medium">{n.label}</p>
+                    <p className="text-xs text-muted-foreground">{n.desc}</p>
+                  </div>
+                  <Switch defaultChecked />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="integration">
+          <div className="grid gap-3 md:grid-cols-2">
+            {[
+              { name: "有赞连锁", status: "已连接", tone: "success" },
+              { name: "企业微信", status: "已连接", tone: "success" },
+              { name: "钉钉机器人", status: "待配置", tone: "warning" },
+              { name: "金蝶云财务", status: "待配置", tone: "warning" },
+            ].map((i) => (
+              <Card key={i.name}>
+                <CardContent className="flex items-center justify-between p-4">
+                  <div>
+                    <p className="font-medium">{i.name}</p>
+                    <p className="text-xs text-muted-foreground">第三方集成</p>
+                  </div>
+                  <Badge className={i.tone === "success" ? "bg-success/10 text-success" : "bg-warning/15 text-warning-foreground"}>
+                    {i.status}
+                  </Badge>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="webhook">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Webhook 配置</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <Label>回调 URL</Label>
+                <Input placeholder="https://your-domain.com/webhook" />
+              </div>
+              <div className="space-y-2">
+                <Label>签名密钥</Label>
+                <Input type="password" defaultValue="••••••••••••••••" />
+              </div>
+              <div className="flex justify-end">
+                <Button className="bg-gradient-brand hover:opacity-90">保存</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="api">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">API 密钥管理</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border p-4 font-mono text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Production Key</span>
+                  <Badge variant="outline">活跃</Badge>
+                </div>
+                <p className="mt-2 break-all">bo_live_••••••••••••••••••••a3f9</p>
+                <div className="mt-3 flex gap-2">
+                  <Button size="sm" variant="outline">复制</Button>
+                  <Button size="sm" variant="outline">轮转</Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="audit">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">系统操作日志</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm">
+                {[
+                  { user: "管理员", action: "更新通知偏好", time: "2 分钟前" },
+                  { user: "采购员·张明", action: "新建大宗包裹 JP-B-1024", time: "1 小时前" },
+                  { user: "运营·李华", action: "导出商品档案 (348 条)", time: "3 小时前" },
+                  { user: "店长·周晓", action: "提交调拨申请 TR-0421", time: "今天 09:24" },
+                ].map((l, i) => (
+                  <li key={i} className="flex items-center justify-between border-b pb-2 last:border-0">
+                    <div>
+                      <span className="font-medium">{l.user}</span>
+                      <span className="ml-2 text-muted-foreground">{l.action}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground tabular-nums">{l.time}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
