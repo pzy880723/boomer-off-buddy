@@ -105,7 +105,7 @@ function AccountsPage() {
   const testMut = useMutation({
     mutationFn: (id: string) => test({ data: { id } }),
     onSuccess: (r) => {
-      r.ok ? toast.success("登录成功") : toast.error(`登录失败：${r.reason}`);
+      r.ok ? toast.success("Cookie 有效，可以同步") : toast.error(r.reason ?? "Cookie 无效");
       qc.invalidateQueries({ queryKey: ["meruki-accounts"] });
     },
   });
