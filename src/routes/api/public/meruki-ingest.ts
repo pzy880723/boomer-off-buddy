@@ -150,6 +150,23 @@ export const Route = createFileRoute("/api/public/meruki-ingest")({
         const orders = findOrderArray(payload);
         const normalized = orders.map(normalizeOrder).filter((x): x is NonNullable<typeof x> => !!x);
 
+        // Always store the raw capture for diagnostics. Cap payload size to keep
+        // the diagnostic table small.
+        try {
+          const raw = JSON.parse(JSON.stringify(payload));
+          const serialized = JSON.stringify(raw);
+          if (serialized.length <= 600_000) {
+            await supabaseAdmin.from("meruki_raw_captures").insert({
+              account_id: account.id,
+              source_url: source_url.slice(0, 2000),
+              payload: raw,
+              recognized: normalized.length > 0,
+            } as never);
+          }
+        } catch {
+          /* ignore */
+        }
+
         const { data: run } = await supabaseAdmin
           .from("meruki_sync_runs")
           .insert({ account_id: account.id, status: "running", message: source_url.slice(0, 200) })
