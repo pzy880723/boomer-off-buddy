@@ -13,7 +13,12 @@
 
   window.addEventListener("message", (ev) => {
     const d = ev.data;
-    if (!d || d.__boomeroff !== true || d.type !== "meruki-capture") return;
+    if (!d || d.__boomeroff !== true) return;
+    if (d.type === "meruki-captured-tick") {
+      chrome.runtime.sendMessage({ type: "meruki-captured-tick" }, () => void chrome.runtime.lastError);
+      return;
+    }
+    if (d.type !== "meruki-capture") return;
     chrome.runtime.sendMessage(
       { type: "meruki-capture", url: d.url, payload: d.payload },
       () => void chrome.runtime.lastError,
