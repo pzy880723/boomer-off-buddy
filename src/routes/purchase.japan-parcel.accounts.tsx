@@ -105,7 +105,7 @@ function AccountsPage() {
   const testMut = useMutation({
     mutationFn: (id: string) => test({ data: { id } }),
     onSuccess: (r) => {
-      r.ok ? toast.success("登录成功") : toast.error(`登录失败：${r.reason}`);
+      r.ok ? toast.success("Cookie 有效，可以同步") : toast.error(r.reason ?? "Cookie 无效");
       qc.invalidateQueries({ queryKey: ["meruki-accounts"] });
     },
   });
@@ -158,20 +158,15 @@ function AccountsPage() {
                     <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label>密码</Label>
-                    <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-                    <p className="text-xs text-muted-foreground">系统会自动尝试登录并缓存 Cookie。如站点要求验证码，请改用下方 Cookie。</p>
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>Cookie（兜底，可选）</Label>
+                    <Label>Cookie *</Label>
                     <Textarea rows={3} value={form.cookie} onChange={(e) => setForm({ ...form, cookie: e.target.value })} placeholder="在 meruki 页面控制台执行 copy(document.cookie) 后粘贴" />
-                    <p className="text-xs text-muted-foreground">推荐：F12 → Console 输入 <code className="rounded bg-muted px-1">copy(document.cookie)</code> 回车，再粘贴到此处。也支持直接粘贴 DevTools「Application → Cookies」表格。</p>
+                    <p className="text-xs text-muted-foreground">F12 → Console 输入 <code className="rounded bg-muted px-1">copy(document.cookie)</code> 回车，再粘贴到此处。meruki 有滑块验证码，无法自动登录，必须手动粘贴 Cookie。</p>
                   </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setOpen(false)}>取消</Button>
-                  <Button onClick={() => createMut.mutate()} disabled={!form.username || (!form.password && !form.cookie) || createMut.isPending}>
-                    {createMut.isPending ? "添加中…" : "添加并测试登录"}
+                  <Button onClick={() => createMut.mutate()} disabled={!form.username || !form.cookie || createMut.isPending}>
+                    {createMut.isPending ? "添加中…" : "添加账号"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -206,12 +201,14 @@ function AccountsPage() {
                     <TableCell>
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
                         a.last_login_status === "ok" ? "bg-emerald-50 text-emerald-700" :
+                        a.last_login_status === "cookie_expired" ? "bg-amber-50 text-amber-700" :
                         a.last_login_status === "captcha" ? "bg-amber-50 text-amber-700" :
                         a.last_login_status === "failed" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"
                       }`}>
-                        {a.last_login_status === "ok" ? "✓ 正常" :
+                        {a.last_login_status === "ok" ? "✓ Cookie 有效" :
+                         a.last_login_status === "cookie_expired" ? "Cookie 已失效，点编辑更新" :
                          a.last_login_status === "captcha" ? "需验证码" :
-                         a.last_login_status === "failed" ? "失败" : "未登录"}
+                         a.last_login_status === "failed" ? "失败" : "未测试"}
                       </span>
                       {a.last_error ? <div className="mt-1 text-xs text-muted-foreground">{a.last_error as string}</div> : null}
                     </TableCell>
@@ -220,7 +217,7 @@ function AccountsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" onClick={() => testMut.mutate(a.id as string)} disabled={testMut.isPending}>
-                        <Zap className="mr-1 h-3.5 w-3.5" /> 测试
+                        <Zap className="mr-1 h-3.5 w-3.5" /> 测试 Cookie
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => syncMut.mutate(a.id as string)} disabled={syncMut.isPending}>
                         <RefreshCw className={`mr-1 h-3.5 w-3.5 ${syncMut.isPending ? "animate-spin" : ""}`} /> 同步
