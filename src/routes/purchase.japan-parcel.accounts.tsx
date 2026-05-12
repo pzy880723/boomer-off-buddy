@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, KeyRound, Pencil, Plus, RefreshCw, Trash2, Zap, History } from "lucide-react";
+import { ArrowLeft, KeyRound, Pencil, Plus, RefreshCw, Trash2, Zap, History, Download, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
