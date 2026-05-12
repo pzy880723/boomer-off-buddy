@@ -65,6 +65,7 @@ export const createMerukiAccount = createServerFn({ method: "POST" })
       ? await encryptPassword(data.password)
       : "x:";
     let session_cookie: string | null = data.cookie ? normalizeCookieInput(data.cookie) : null;
+    if (session_cookie) assertCookieHasRequiredFields(session_cookie);
     let last_login_status: string | null = null;
     let last_error: string | null = null;
     let last_login_at: string | null = null;
