@@ -52,6 +52,7 @@ function AccountsPage() {
   const qc = useQueryClient();
   const fetchAccounts = useServerFn(listMerukiAccounts);
   const create = useServerFn(createMerukiAccount);
+  const update = useServerFn(updateMerukiAccount);
   const del = useServerFn(deleteMerukiAccount);
   const test = useServerFn(testMerukiLogin);
   const sync = useServerFn(syncMerukiOrders);
@@ -61,6 +62,8 @@ function AccountsPage() {
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ username: "", password: "", cookie: "", display_name: "" });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ password: "", cookie: "", display_name: "" });
   const [runsFor, setRunsFor] = useState<string | null>(null);
 
   const createMut = useMutation({
@@ -69,6 +72,23 @@ function AccountsPage() {
       toast.success(r.warning ? `账号已添加（${r.warning}）` : "账号添加成功");
       setOpen(false);
       setForm({ username: "", password: "", cookie: "", display_name: "" });
+      qc.invalidateQueries({ queryKey: ["meruki-accounts"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: () => {
+      const payload: { id: string; password?: string; cookie?: string; display_name?: string } = { id: editId! };
+      if (editForm.password) payload.password = editForm.password;
+      if (editForm.cookie) payload.cookie = editForm.cookie;
+      if (editForm.display_name) payload.display_name = editForm.display_name;
+      return update({ data: payload });
+    },
+    onSuccess: () => {
+      toast.success("账号已更新");
+      setEditId(null);
+      setEditForm({ password: "", cookie: "", display_name: "" });
       qc.invalidateQueries({ queryKey: ["meruki-accounts"] });
     },
     onError: (e) => toast.error((e as Error).message),
