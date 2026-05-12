@@ -186,8 +186,9 @@ function AccountsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>账号</TableHead>
-                  <TableHead>登录状态</TableHead>
-                  <TableHead>最后登录</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead>插件令牌</TableHead>
+                  <TableHead>最后上报</TableHead>
                   <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
@@ -205,23 +206,21 @@ function AccountsPage() {
                         a.last_login_status === "captcha" ? "bg-amber-50 text-amber-700" :
                         a.last_login_status === "failed" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"
                       }`}>
-                        {a.last_login_status === "ok" ? "✓ Cookie 有效" :
-                         a.last_login_status === "cookie_expired" ? "Cookie 已失效，点编辑更新" :
-                         a.last_login_status === "captcha" ? "需验证码" :
-                         a.last_login_status === "failed" ? "失败" : "未测试"}
+                        {a.last_login_status === "ok" ? "✓ 有数据" :
+                         a.last_login_status === "cookie_expired" ? "等待插件上报" :
+                         a.last_login_status === "failed" ? "失败" : "未上报"}
                       </span>
                       {a.last_error ? <div className="mt-1 text-xs text-muted-foreground">{a.last_error as string}</div> : null}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="outline" size="sm" className="font-mono text-xs" onClick={() => copyToken(a.ingest_token)}>
+                        <Copy className="mr-1 h-3 w-3" /> {a.ingest_token ? a.ingest_token.slice(0, 8) + "…" : "—"}
+                      </Button>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {a.last_login_at ? new Date(a.last_login_at as string).toLocaleString() : "—"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => testMut.mutate(a.id as string)} disabled={testMut.isPending}>
-                        <Zap className="mr-1 h-3.5 w-3.5" /> 测试 Cookie
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => syncMut.mutate(a.id as string)} disabled={syncMut.isPending}>
-                        <RefreshCw className={`mr-1 h-3.5 w-3.5 ${syncMut.isPending ? "animate-spin" : ""}`} /> 同步
-                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => {
                         setEditId(a.id as string);
                         setEditForm({ password: "", cookie: "", display_name: (a.display_name as string) ?? "" });
