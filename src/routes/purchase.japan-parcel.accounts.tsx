@@ -181,6 +181,24 @@ function AccountsPage() {
         }
       />
 
+      <Card className="mb-4 border-dashed">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <Download className="mt-0.5 h-5 w-5 text-primary" />
+            <div className="flex-1">
+              <div className="font-medium">浏览器插件（推荐方式）</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                安装插件后，打开 meruki 任意订单页面即可自动上报，无需粘贴 Cookie。
+                安装步骤：下载 → 解压 → 打开 <code className="rounded bg-muted px-1">chrome://extensions</code> → 开启「开发者模式」→ 点「加载已解压的扩展程序」选解压后的文件夹 → 点插件图标，把下方账号的「插件令牌」粘进去保存。
+              </p>
+            </div>
+            <Button size="sm" onClick={downloadExtension}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> 下载插件
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="p-0">
           {accounts.isLoading ? (
