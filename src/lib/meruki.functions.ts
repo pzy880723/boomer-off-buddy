@@ -88,7 +88,11 @@ export const updateMerukiAccount = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    const patch: Record<string, unknown> = {};
+    const patch: {
+      password_encrypted?: string;
+      session_cookie?: string | null;
+      display_name?: string | null;
+    } = {};
     if (data.password) patch.password_encrypted = await encryptPassword(data.password);
     if (data.cookie !== undefined) patch.session_cookie = data.cookie || null;
     if (data.display_name !== undefined) patch.display_name = data.display_name;
