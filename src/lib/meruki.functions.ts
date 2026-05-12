@@ -120,7 +120,11 @@ export const updateMerukiAccount = createServerFn({ method: "POST" })
       display_name?: string | null;
     } = {};
     if (data.password) patch.password_encrypted = await encryptPassword(data.password);
-    if (data.cookie !== undefined) patch.session_cookie = data.cookie ? normalizeCookieInput(data.cookie) : null;
+    if (data.cookie !== undefined) {
+      const normalized = data.cookie ? normalizeCookieInput(data.cookie) : null;
+      if (normalized) assertCookieHasRequiredFields(normalized);
+      patch.session_cookie = normalized;
+    }
     if (data.display_name !== undefined) patch.display_name = data.display_name;
     const { data: row, error } = await supabaseAdmin
       .from("meruki_accounts")
