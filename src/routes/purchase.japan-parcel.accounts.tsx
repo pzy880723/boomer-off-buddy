@@ -64,7 +64,7 @@ function AccountsPage() {
 
   const createMut = useMutation({
     mutationFn: () => create({ data: form }),
-    onSuccess: (r) => {
+    onSuccess: (r: { warning: string | null }) => {
       toast.success(r.warning ? `账号已添加（${r.warning}）` : "账号添加成功");
       setOpen(false);
       setForm({ username: "", password: "", cookie: "", display_name: "" });
