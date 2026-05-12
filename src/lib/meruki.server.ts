@@ -166,6 +166,36 @@ export function normalizeCookieInput(raw: string): string {
   return Array.from(map, ([n, v]) => `${n}=${v}`).join("; ");
 }
 
+// Validate that a (already-normalized) Cookie header contains the fields
+// required for meruki authenticated requests. Throws a friendly error listing
+// what's missing so the user knows their paste was incomplete.
+//
+// Required (one of each group must be present):
+//   - session group: a key starting with `kmgSession` (meruki login session)
+//                    OR one of JSESSIONID / PHPSESSID / sessionid / token
+//   - device group:  `deviceId` (meruki ties session to device fingerprint)
+export function assertCookieHasRequiredFields(cookieHeader: string): void {
+  const names = new Set<string>();
+  for (const seg of cookieHeader.split(/;\s*/)) {
+    const i = seg.indexOf("=");
+    if (i > 0) names.add(seg.slice(0, i).trim());
+  }
+  const has = (pred: (n: string) => boolean) => Array.from(names).some(pred);
+
+  const missing: string[] = [];
+  const hasSession =
+    has((n) => /^kmgSession/i.test(n)) ||
+    has((n) => /^(JSESSIONID|PHPSESSID|sessionid|token)$/i.test(n));
+  if (!hasSession) missing.push("会话凭据 (kmgSession*)");
+  if (!names.has("deviceId")) missing.push("deviceId");
+
+  if (missing.length) {
+    throw new Error(
+      `Cookie 不完整，缺少：${missing.join("、")}。请在已登录的 meruki 页面 F12 控制台执行 copy(document.cookie) 后整段粘贴。`,
+    );
+  }
+}
+
 export interface ScrapedParcel extends ParcelInput {
   source_order_no: string;
 }
