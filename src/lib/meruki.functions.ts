@@ -6,6 +6,7 @@ import {
   encryptPassword,
   fetchInProgressOrders,
   loginMeruki,
+  normalizeCookieInput,
 } from "./meruki.server";
 import { computeCompleteness } from "./japan-parcel.helpers";
 
