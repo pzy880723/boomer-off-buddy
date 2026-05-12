@@ -40,6 +40,7 @@ import {
   listSyncRuns,
   syncMerukiOrders,
   testMerukiLogin,
+  updateMerukiAccount,
 } from "@/lib/meruki.functions";
 
 export const Route = createFileRoute("/purchase/japan-parcel/accounts")({
