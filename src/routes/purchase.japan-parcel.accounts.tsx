@@ -267,6 +267,33 @@ function AccountsPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={!!editId} onOpenChange={(v) => { if (!v) { setEditId(null); setEditForm({ password: "", cookie: "", display_name: "" }); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>编辑 Meruki 账号</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label>备注名</Label>
+              <Input value={editForm.display_name} onChange={(e) => setEditForm({ ...editForm, display_name: e.target.value })} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>新密码（留空表示不修改）</Label>
+              <Input type="password" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>更新 Cookie（留空表示不修改）</Label>
+              <Textarea rows={3} value={editForm.cookie} onChange={(e) => setEditForm({ ...editForm, cookie: e.target.value })} placeholder="在 meruki 页面控制台执行 copy(document.cookie) 后粘贴" />
+              <p className="text-xs text-muted-foreground">Cookie 过期后在这里粘贴新 Cookie 即可，无需删除账号。</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditId(null)}>取消</Button>
+            <Button onClick={() => updateMut.mutate()} disabled={updateMut.isPending || (!editForm.password && !editForm.cookie && !editForm.display_name)}>
+              {updateMut.isPending ? "保存中…" : "保存"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
