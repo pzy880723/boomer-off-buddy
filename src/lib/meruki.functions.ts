@@ -203,21 +203,15 @@ export const syncMerukiOrders = createServerFn({ method: "POST" })
       .select()
       .single();
 
-    let cookie = acc.session_cookie as string | null;
+    const cookie = acc.session_cookie as string | null;
     try {
-      // re-login if no cookie
-      if (!cookie && acc.password_encrypted) {
-        const password = await decryptPassword(acc.password_encrypted);
-        const r = await loginMeruki(acc.username, password);
-        if (!r.ok || !r.cookie)
-          throw new Error(r.reason ?? "无法登录 meruki，请先在账号管理中粘贴 Cookie");
-        cookie = r.cookie;
+      if (!cookie) {
         await supabaseAdmin
           .from("meruki_accounts")
-          .update({ session_cookie: cookie, last_login_at: new Date().toISOString(), last_login_status: "ok" })
+          .update({ last_login_status: "cookie_expired", last_error: "未粘贴 Cookie" })
           .eq("id", data.id);
+        throw new Error("账号无可用 Cookie，请在「编辑」里粘贴 meruki 页面的 Cookie");
       }
-      if (!cookie) throw new Error("账号无可用 Cookie，请先粘贴 Cookie 或填写正确密码");
 
       const orders = await fetchInProgressOrders(cookie);
       let inserted = 0;
@@ -244,6 +238,10 @@ export const syncMerukiOrders = createServerFn({ method: "POST" })
         }
       }
       await supabaseAdmin
+        .from("meruki_accounts")
+        .update({ last_login_status: "ok", last_login_at: new Date().toISOString(), last_error: null })
+        .eq("id", data.id);
+      await supabaseAdmin
         .from("meruki_sync_runs")
         .update({
           status: "success",
@@ -256,6 +254,14 @@ export const syncMerukiOrders = createServerFn({ method: "POST" })
       return { ok: true, fetched: orders.length, inserted, updated };
     } catch (e) {
       const msg = (e as Error).message;
+      const expired = /401|403|登录|未登录|登陆|失效|sign in|unauth/i.test(msg);
+      await supabaseAdmin
+        .from("meruki_accounts")
+        .update({
+          last_login_status: expired ? "cookie_expired" : "failed",
+          last_error: msg,
+        })
+        .eq("id", data.id);
       await supabaseAdmin
         .from("meruki_sync_runs")
         .update({ status: "failed", finished_at: new Date().toISOString(), message: msg })
