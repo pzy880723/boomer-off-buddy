@@ -1,6 +1,6 @@
 // MV3 service worker: forwards captured payloads to the configured backend
 // and tracks rich diagnostic stats for the popup.
-const DEFAULT_BASE = "https://project--2158bffa-7f82-4bc6-9df9-c59319d262f7.lovable.app";
+const DEFAULT_BASE = "https://project--2158bffa-7f82-4bc6-9df9-c59319d262f7-dev.lovable.app";
 const MAX_RECENT = 10;
 
 const DEFAULT_STATS = {
