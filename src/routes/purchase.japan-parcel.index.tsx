@@ -262,9 +262,9 @@ function JapanParcelList() {
                   <TableRow key={r.id}>
                     <TableCell>
                       <Link to="/purchase/japan-parcel/$id" params={{ id: r.id }}>
-                        {r.item_image_url ? (
+                        {(r.item_image_url || firstImage) ? (
                           <img
-                            src={r.item_image_url}
+                            src={(r.item_image_url || firstImage)!}
                             alt=""
                             className="h-10 w-10 rounded object-cover"
                           />
@@ -276,7 +276,7 @@ function JapanParcelList() {
                     <TableCell>
                       <Link to="/purchase/japan-parcel/$id" params={{ id: r.id }}>
                         <div className="font-medium text-sm">
-                          {r.item_title || r.item_title_cn || r.source_order_no || "(未命名)"}
+                          {r.item_title || r.item_title_cn || firstTitle || r.source_order_no || "(未命名)"}
                         </div>
                         <div className="mt-0.5 text-xs text-muted-foreground">
                           {r.source_order_no || "—"} ·{" "}
@@ -286,7 +286,16 @@ function JapanParcelList() {
                         </div>
                       </Link>
                     </TableCell>
-                    <TableCell className="text-sm">{r.seller || "—"}</TableCell>
+                    <TableCell className="text-sm">{r.seller || r.receiver_name || "—"}</TableCell>
+                    <TableCell className="text-center text-sm">
+                      {subCount > 0 ? (
+                        <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium">
+                          {subCount}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -313,7 +322,11 @@ function JapanParcelList() {
                       </DropdownMenu>
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm">
-                      {r.total_jpy != null ? `¥${Number(r.total_jpy).toLocaleString()}` : "—"}
+                      {totalCny > 0
+                        ? `￥${totalCny.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                        : r.total_jpy != null
+                        ? `¥${Number(r.total_jpy).toLocaleString()}`
+                        : "—"}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {r.purchased_at
@@ -326,7 +339,8 @@ function JapanParcelList() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}
