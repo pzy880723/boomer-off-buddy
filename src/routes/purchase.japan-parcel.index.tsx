@@ -538,6 +538,7 @@ function JapanParcelList() {
         onOpenChange={(o) => !o && setOpenCardId(null)}
         parcel={openParcel}
         items={(openParcel?.japan_parcel_items ?? []) as ParcelCardItem[]}
+        defaultTab={openTab}
       />
     </div>
   );
