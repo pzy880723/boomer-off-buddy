@@ -243,14 +243,22 @@ function JapanParcelList() {
                   <TableHead className="w-[60px]">图</TableHead>
                   <TableHead>订单号 / 标题</TableHead>
                   <TableHead>卖家</TableHead>
+                  <TableHead className="text-center">子单</TableHead>
                   <TableHead>状态</TableHead>
-                  <TableHead className="text-right">总价 ¥</TableHead>
+                  <TableHead className="text-right">合计 ￥</TableHead>
                   <TableHead>采购时间</TableHead>
                   <TableHead className="text-center">完整度</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => (
+                {rows.map((r) => {
+                  const subs = (r as { japan_parcel_items?: { item_total_cny: number | null; item_title: string | null; item_image_url: string | null }[] }).japan_parcel_items ?? [];
+                  const subCount = subs.length;
+                  const subSumCny = subs.reduce((s, it) => s + (Number(it.item_total_cny) || 0), 0);
+                  const totalCny = (Number(r.intl_total_cny) || 0) + subSumCny;
+                  const firstTitle = subs[0]?.item_title;
+                  const firstImage = subs[0]?.item_image_url;
+                  return (
                   <TableRow key={r.id}>
                     <TableCell>
                       <Link to="/purchase/japan-parcel/$id" params={{ id: r.id }}>
