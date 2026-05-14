@@ -331,7 +331,14 @@ function JapanParcelList() {
                   const firstTitle = subs[0]?.item_title;
                   const firstImage = subs[0]?.item_image_url;
                   return (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} data-state={selected.has(r.id) ? "selected" : undefined}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selected.has(r.id)}
+                        onCheckedChange={() => toggleSelect(r.id)}
+                        aria-label="选中此行"
+                      />
+                    </TableCell>
                     <TableCell>
                       <Link to="/purchase/japan-parcel/$id" params={{ id: r.id }}>
                         {(r.item_image_url || firstImage) ? (
