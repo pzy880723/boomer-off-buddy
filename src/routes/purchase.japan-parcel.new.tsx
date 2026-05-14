@@ -273,16 +273,17 @@ function NewParcelPage() {
         });
       }
 
-      const segSummary = `parcel:${segments.parcel_block ? "✓" : "✗"} · intl:${segments.intl_fee_block ? "✓" : "✗"} · 子订单 ${segments.item_blocks.length}`;
+      const segSummary = `parcel:${segments.parcel_block ? "✓" : "✗"} · intl:${segments.intl_fee_block ? "✓" : "✗"} · 子订单 ${segments.item_blocks.length}${segments.hints.source_order_no ? " · 订单号已锁定" : ""}`;
       upsertStep({
         id: "seg-result",
         label: "区块识别",
         status: segments.parcel_block || segments.item_blocks.length ? "done" : "warn",
         detail: segSummary,
         payload: {
-          parcel_block: segments.parcel_block?.slice(0, 200),
-          intl_fee_block: segments.intl_fee_block?.slice(0, 200),
-          item_blocks_count: segments.item_blocks.length,
+          hints: segments.hints,
+          parcel_block: segments.parcel_block?.slice(0, 300),
+          intl_fee_block: segments.intl_fee_block?.slice(0, 300),
+          item_blocks_preview: segments.item_blocks.map((b) => b.slice(0, 120)),
         },
       });
 
