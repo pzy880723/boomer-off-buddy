@@ -229,7 +229,19 @@ function NewParcelPage() {
     const startedAt = Date.now();
     try {
       // ===== Step 1: 预处理 + 分段（或 OCR + 分段） =====
-      let segments: { parcel_block: string | null; intl_fee_block: string | null; item_blocks: string[]; raw_chars: number; cleaned_chars: number };
+      let segments: {
+        parcel_block: string | null;
+        intl_fee_block: string | null;
+        item_blocks: string[];
+        hints: {
+          source_order_no: string | null;
+          tracking_no: string | null;
+          status_text: string | null;
+          sub_order_nos: string[];
+        };
+        raw_chars: number;
+        cleaned_chars: number;
+      };
       if (smartTab === "image" && smartImage) {
         upsertStep({ id: "ocr", label: "图片 OCR", status: "running", detail: "调用视觉模型读取文字…" });
         const t0 = Date.now();
@@ -261,16 +273,17 @@ function NewParcelPage() {
         });
       }
 
-      const segSummary = `parcel:${segments.parcel_block ? "✓" : "✗"} · intl:${segments.intl_fee_block ? "✓" : "✗"} · 子订单 ${segments.item_blocks.length}`;
+      const segSummary = `parcel:${segments.parcel_block ? "✓" : "✗"} · intl:${segments.intl_fee_block ? "✓" : "✗"} · 子订单 ${segments.item_blocks.length}${segments.hints.source_order_no ? " · 订单号已锁定" : ""}`;
       upsertStep({
         id: "seg-result",
         label: "区块识别",
         status: segments.parcel_block || segments.item_blocks.length ? "done" : "warn",
         detail: segSummary,
         payload: {
-          parcel_block: segments.parcel_block?.slice(0, 200),
-          intl_fee_block: segments.intl_fee_block?.slice(0, 200),
-          item_blocks_count: segments.item_blocks.length,
+          hints: segments.hints,
+          parcel_block: segments.parcel_block?.slice(0, 300),
+          intl_fee_block: segments.intl_fee_block?.slice(0, 300),
+          item_blocks_preview: segments.item_blocks.map((b) => b.slice(0, 120)),
         },
       });
 
@@ -343,10 +356,22 @@ function NewParcelPage() {
 
       await Promise.all(tasks);
 
-      // ===== Step 3: 写入表单 =====
-      if (parcelData) setParcel((p) => mergeNonNull(p, parcelData!));
+      // ===== Step 3: 写入表单（regex hints 兜底，AI 漏抽时补上） =====
+      const parcelMerged: Record<string, unknown> = { ...(parcelData ?? {}) };
+      if (segments.hints.source_order_no && !parcelMerged.source_order_no)
+        parcelMerged.source_order_no = segments.hints.source_order_no;
+      if (segments.hints.tracking_no && !parcelMerged.tracking_no)
+        parcelMerged.tracking_no = segments.hints.tracking_no;
+      if (segments.hints.status_text && !parcelMerged.status_text)
+        parcelMerged.status_text = segments.hints.status_text;
+      if (Object.keys(parcelMerged).length) setParcel((p) => mergeNonNull(p, parcelMerged));
       if (intlData) setIntl((i) => mergeNonNull(i, intlData!));
-      const validItems = itemsData.filter(Boolean) as Record<string, unknown>[];
+      const validItems = itemsData.map((it, idx) => {
+        const merged = (it ?? {}) as Record<string, unknown>;
+        const hint = segments.hints.sub_order_nos[idx];
+        if (hint && !merged.sub_order_no) merged.sub_order_no = hint;
+        return Object.keys(merged).length ? merged : null;
+      }).filter(Boolean) as Record<string, unknown>[];
       if (validItems.length) {
         setItems(validItems.map((it) => mergeNonNull(emptyItem(), it) as SubItem));
       }
