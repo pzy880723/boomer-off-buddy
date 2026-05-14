@@ -63,6 +63,9 @@ function JapanParcelList() {
   const qc = useQueryClient();
   const fetchList = useServerFn(listJapanParcels);
   const updateStatus = useServerFn(updateJapanParcelStatus);
+  const delOne = useServerFn(deleteJapanParcel);
+  const delMany = useServerFn(bulkDeleteJapanParcels);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [search, setSearch] = useState("");
   const [statuses, setStatuses] = useState<string[]>([]);
