@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   Dialog,
   DialogContent,
@@ -7,7 +9,9 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { ImageOff } from "lucide-react";
 import { simplifyStatus, SIMPLE_STATUS_LABEL } from "@/lib/japan-parcel.helpers";
+import { getJapanParcel } from "@/lib/japan-parcel.functions";
 import { ParcelEditPanel } from "./parcel-edit-panel";
 import { ParcelOverviewSections } from "./parcel-edit-sections";
 import type { ParcelFormValue } from "@/components/parcel-form";
@@ -30,44 +34,20 @@ export interface ParcelCardData {
   source_order_no: string | null;
   tracking_no: string | null;
   status: string;
-  purchased_at: string | null;
-  received_at?: string | null;
-  intl_total_jpy: number | null;
-  intl_total_cny?: number | null;
-  intl_freight_jpy: number | null;
-  intl_reinforce_jpy: number | null;
-  intl_merge_fee_jpy: number | null;
-  intl_send_fee_jpy: number | null;
-  intl_photo_fee_jpy?: number | null;
-  intl_keep_packaging_jpy?: number | null;
-  intl_points_used?: number | null;
-  intl_ship_method?: string | null;
-  intl_charge_method?: string | null;
-  intl_pay_method?: string | null;
-  intl_pay_at?: string | null;
-  intl_merchant_order_no?: string | null;
-  intl_exchange_rate: number | null;
-  tariff_jpy: number | null;
-  grand_total_jpy: number | null;
-  grand_total_cny: number | null;
-  notes?: string | null;
-  warehouse_location?: string | null;
-  receiver_name?: string | null;
-  receiver_phone?: string | null;
-  receiver_address?: string | null;
+  [key: string]: unknown;
 }
 
 export function ParcelCardDialog({
   open,
   onOpenChange,
   parcel,
-  items,
   defaultTab = "overview",
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   parcel: ParcelCardData | null;
-  items: ParcelCardItem[];
+  /** 不再使用，列表行字段不全；保留兼容 */
+  items?: ParcelCardItem[];
   defaultTab?: "overview" | "edit";
 }) {
   const [tab, setTab] = useState<string>(defaultTab);
@@ -75,12 +55,23 @@ export function ParcelCardDialog({
     if (open) setTab(defaultTab);
   }, [open, defaultTab]);
 
-  if (!parcel) return null;
-  const itemsTotalJpy = items.reduce((s, it) => s + (Number(it.item_total_jpy) || 0), 0);
-  const simple = simplifyStatus(parcel.status);
+  const get = useServerFn(getJapanParcel);
+  const id = parcel?.id;
+  const q = useQuery({
+    queryKey: ["jp-parcel", id],
+    queryFn: () => get({ data: { id: id! } }),
+    enabled: !!id && open,
+  });
 
-  // 把 parcel 行映射成 ParcelFormValue（只读概览复用编辑布局）
-  const overviewValue: ParcelFormValue = parcel as unknown as ParcelFormValue;
+  if (!parcel) return null;
+
+  const fullRow = (q.data?.row ?? parcel) as ParcelFormValue;
+  const fullItems = (q.data?.items ?? []) as ParcelCardItem[];
+  const itemsTotalJpy = fullItems.reduce(
+    (s, it) => s + (Number(it.item_total_jpy) || 0),
+    0,
+  );
+  const simple = simplifyStatus(parcel.status);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -91,6 +82,9 @@ export function ParcelCardDialog({
             <Badge variant={simple === "delivered" ? "default" : "secondary"}>
               {SIMPLE_STATUS_LABEL[simple]}
             </Badge>
+            {q.isFetching && (
+              <span className="text-[10px] text-muted-foreground">加载中…</span>
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -101,15 +95,25 @@ export function ParcelCardDialog({
           </TabsList>
 
           <TabsContent value="overview" className="pt-3">
-            <ParcelOverviewSections
-              value={overviewValue}
-              itemsTotalJpy={itemsTotalJpy}
-              itemsSlot={<OverviewItems items={items} />}
-            />
+            {q.isLoading && !q.data ? (
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                加载中…
+              </div>
+            ) : (
+              <ParcelOverviewSections
+                value={fullRow}
+                itemsTotalJpy={itemsTotalJpy}
+                itemsSlot={<OverviewItems items={fullItems} />}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="edit" className="pt-3">
-            <ParcelEditPanel parcelId={parcel.id} compact onDeleted={() => onOpenChange(false)} />
+            <ParcelEditPanel
+              parcelId={parcel.id}
+              compact
+              onDeleted={() => onOpenChange(false)}
+            />
           </TabsContent>
         </Tabs>
       </DialogContent>
@@ -120,11 +124,13 @@ export function ParcelCardDialog({
 function OverviewItems({ items }: { items: ParcelCardItem[] }) {
   if (items.length === 0) {
     return (
-      <div className="py-6 text-center text-sm text-muted-foreground">此包裹暂无子订单</div>
+      <div className="py-6 text-center text-sm text-muted-foreground">
+        此包裹暂无子订单
+      </div>
     );
   }
   return (
-    <div className="space-y-2">
+    <div className="grid gap-2 md:grid-cols-2">
       {items.map((it, idx) => (
         <div key={it.id} className="flex gap-3 rounded-md border p-2">
           {it.item_image_url ? (
@@ -134,7 +140,9 @@ function OverviewItems({ items }: { items: ParcelCardItem[] }) {
               className="h-16 w-16 flex-shrink-0 rounded object-cover"
             />
           ) : (
-            <div className="h-16 w-16 flex-shrink-0 rounded bg-muted" />
+            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+              <ImageOff className="h-5 w-5" />
+            </div>
           )}
           <div className="min-w-0 flex-1 text-xs">
             <div className="font-mono text-[10px] text-muted-foreground">
@@ -148,17 +156,35 @@ function OverviewItems({ items }: { items: ParcelCardItem[] }) {
                 {it.item_title}
               </div>
             )}
-            <div className="mt-1 flex items-center justify-between gap-1">
-              <span className="text-muted-foreground">
-                {it.unit_price_jpy != null
-                  ? `¥${Number(it.unit_price_jpy).toLocaleString()}`
-                  : "—"}
-                {it.quantity ? ` × ${it.quantity}` : ""}
-              </span>
+            <div className="mt-1 grid grid-cols-3 gap-1 text-[11px]">
+              <div>
+                <div className="text-muted-foreground">单价</div>
+                <div className="font-mono">
+                  {it.unit_price_jpy != null
+                    ? `¥${Number(it.unit_price_jpy).toLocaleString()}`
+                    : "—"}
+                </div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">数量</div>
+                <div className="font-mono">{it.quantity ?? "—"}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">重量</div>
+                <div className="font-mono">
+                  {it.weight_g != null ? `${it.weight_g}g` : "—"}
+                </div>
+              </div>
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-1 border-t pt-1">
+              <span className="text-muted-foreground">小计</span>
               <span className="font-mono">
                 {it.item_total_jpy != null
                   ? `¥${Number(it.item_total_jpy).toLocaleString()}`
                   : "—"}
+                {it.item_total_cny != null
+                  ? ` ≈ ￥${Number(it.item_total_cny).toLocaleString()}`
+                  : ""}
               </span>
             </div>
           </div>
