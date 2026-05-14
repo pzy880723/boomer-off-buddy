@@ -417,6 +417,27 @@ function JapanParcelList() {
                         <CompletenessRing value={r.completeness ?? 0} />
                       </div>
                     </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button asChild variant="ghost" size="icon" className="h-7 w-7">
+                          <Link to="/purchase/japan-parcel/$id" params={{ id: r.id }} aria-label="编辑">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          disabled={delMut.isPending}
+                          onClick={() => {
+                            if (confirm("确认删除此订单？")) delMut.mutate(r.id);
+                          }}
+                          aria-label="删除"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                   );
                 })}
