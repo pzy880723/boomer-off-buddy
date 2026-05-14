@@ -76,7 +76,7 @@ export function ParcelCardDialog({
 
   if (!parcel) return null;
 
-  const fullRow = (q.data?.row ?? parcel) as ParcelFormValue;
+  const fullRow = (q.data?.row ?? parcel) as unknown as ParcelFormValue;
   const fullItems = (q.data?.items ?? []) as ParcelCardItem[];
   const itemsTotalJpy = fullItems.reduce(
     (s, it) => s + (Number(it.item_total_jpy) || 0),
