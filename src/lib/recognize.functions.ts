@@ -224,12 +224,13 @@ async function extractWith<T extends z.ZodTypeAny>(args: {
           { role: "user", content: args.block },
         ],
       });
-      if (args.isCritical(output)) {
-        return { ok: true, data: output, attempts: attempt, model: modelName };
+      const out = output as z.infer<T>;
+      if (args.isCritical(out)) {
+        return { ok: true, data: out, attempts: attempt, model: modelName };
       }
       // critical missing → continue to fallback
       if (attempt === 2) {
-        return { ok: false, data: output, attempts: 2, model: modelName, reason: "关键字段缺失" };
+        return { ok: false, data: out, attempts: 2, model: modelName, reason: "关键字段缺失" };
       }
     } catch (e) {
       if (attempt === 2) {
