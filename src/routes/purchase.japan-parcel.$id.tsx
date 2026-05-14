@@ -14,8 +14,9 @@ import {
   deleteJapanParcel,
   getJapanParcel,
   updateJapanParcel,
+  updateJapanParcelStatus,
 } from "@/lib/japan-parcel.functions";
-import { PARCEL_SOURCE_LABEL } from "@/lib/japan-parcel.helpers";
+import { PARCEL_SOURCE_LABEL, PARCEL_STATUS_OPTIONS } from "@/lib/japan-parcel.helpers";
 
 export const Route = createFileRoute("/purchase/japan-parcel/$id")({
   head: () => ({ meta: [{ title: "小包裹详情 · BOOMER OFF" }] }),
