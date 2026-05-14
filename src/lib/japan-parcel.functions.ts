@@ -87,7 +87,7 @@ export const listJapanParcels = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     let q = supabaseAdmin
       .from("japan_parcels")
-      .select("*, japan_parcel_items(id, item_title, item_image_url, item_total_jpy, item_total_cny, weight_g)")
+      .select("*, japan_parcel_items(id, sub_order_no, item_title, item_title_cn, item_image_url, item_total_jpy, item_total_cny, unit_price_jpy, quantity, weight_g)")
       .order("created_at", { ascending: false });
     if (data.status?.length) q = q.in("status", data.status);
     if (data.source?.length) q = q.in("source", data.source);
@@ -247,4 +247,25 @@ export const bulkCreateParcelItems = createServerFn({ method: "POST" })
       .select();
     if (error) throw new Error(error.message);
     return { rows: rows ?? [] };
+  });
+
+// 批量为缺失中文标题的子订单写入翻译结果
+export const bulkSetItemTitlesCn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        updates: z.array(z.object({ id: z.string().uuid(), item_title_cn: z.string().min(1) })).min(1).max(50),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    let count = 0;
+    for (const u of data.updates) {
+      const { error } = await supabaseAdmin
+        .from("japan_parcel_items")
+        .update({ item_title_cn: u.item_title_cn })
+        .eq("id", u.id);
+      if (!error) count++;
+    }
+    return { ok: true, count };
   });

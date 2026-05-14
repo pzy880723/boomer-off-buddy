@@ -28,10 +28,12 @@ import {
   extractIntlFee,
   extractSubItem,
 } from "@/lib/recognize.functions";
+import { translateTitles } from "@/lib/translate.functions";
 import {
   RecognizeTimeline,
   type TimelineStep,
 } from "@/components/japan-parcel/recognize-timeline";
+import { ItemImageUploader } from "@/components/japan-parcel/item-image-uploader";
 
 export const Route = createFileRoute("/purchase/japan-parcel/new")({
   head: () => ({ meta: [{ title: "新建小包裹 · BOOMER OFF" }] }),
@@ -194,6 +196,7 @@ function NewParcelPage() {
   const fnExtractParcel = useServerFn(extractParcelInfo);
   const fnExtractIntl = useServerFn(extractIntlFee);
   const fnExtractItem = useServerFn(extractSubItem);
+  const fnTranslate = useServerFn(translateTitles);
 
   const [parcel, setParcel] = useState<ParcelInfo>(emptyParcel());
   const [intl, setIntl] = useState<IntlFee>(emptyIntl());
@@ -376,6 +379,31 @@ function NewParcelPage() {
         setItems(validItems.map((it) => mergeNonNull(emptyItem(), it) as SubItem));
       }
       setUsedAi(true);
+
+      // ===== Step 4: 自动翻译子订单日文标题 =====
+      const toTranslate = validItems
+        .map((it, idx) => ({ idx, jp: (it.item_title as string | null) ?? null, cn: (it.item_title_cn as string | null) ?? null }))
+        .filter((x) => x.jp && !x.cn);
+      if (toTranslate.length) {
+        upsertStep({ id: "translate", label: "翻译子订单标题", status: "running", detail: `${toTranslate.length} 条` });
+        const t0 = Date.now();
+        try {
+          const tr = await fnTranslate({ data: { titles: toTranslate.map((x) => x.jp!) } });
+          if (tr.ok) {
+            setItems((arr) => {
+              const next = arr.slice();
+              toTranslate.forEach((x, i) => {
+                const cn = tr.translations[i];
+                if (cn && next[x.idx]) next[x.idx] = { ...next[x.idx], item_title_cn: cn };
+              });
+              return next;
+            });
+          }
+          upsertStep({ id: "translate", label: "翻译子订单标题", status: tr.ok ? "done" : "warn", detail: `${toTranslate.length} 条 · ${((Date.now() - t0) / 1000).toFixed(1)}s`, durationMs: Date.now() - t0 });
+        } catch (e) {
+          upsertStep({ id: "translate", label: "翻译子订单标题", status: "warn", errorMsg: (e as Error).message });
+        }
+      }
 
       upsertStep({
         id: "done",
@@ -610,11 +638,15 @@ function NewParcelPage() {
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <F label="商品标题（日）" value={it.item_title} onChange={(v) => updateItem(it._key, { item_title: v as Str })} />
-                <F label="商品标题（中）" value={it.item_title_cn} onChange={(v) => updateItem(it._key, { item_title_cn: v as Str })} />
-                <F label="商品图 URL" value={it.item_image_url} onChange={(v) => updateItem(it._key, { item_image_url: v as Str })} />
-                <F label="商品费用 JPY" type="number" value={it.item_total_jpy} onChange={(v) => updateItem(it._key, { item_total_jpy: v as Num })} />
+              <div className="flex gap-3">
+                <ItemImageUploader
+                  value={it.item_image_url}
+                  onChange={(url) => updateItem(it._key, { item_image_url: url })}
+                />
+                <div className="grid flex-1 gap-3 md:grid-cols-3">
+                  <F label="商品标题（日）" value={it.item_title} onChange={(v) => updateItem(it._key, { item_title: v as Str })} />
+                  <F label="商品标题（中）" value={it.item_title_cn} onChange={(v) => updateItem(it._key, { item_title_cn: v as Str })} />
+                  <F label="商品费用 JPY" type="number" value={it.item_total_jpy} onChange={(v) => updateItem(it._key, { item_total_jpy: v as Num })} />
                 <F label="≈ CNY" type="number" value={it.item_total_cny} onChange={(v) => updateItem(it._key, { item_total_cny: v as Num })} />
                 <F label="结算汇率" type="number" value={it.exchange_rate} onChange={(v) => updateItem(it._key, { exchange_rate: v as Num })} />
                 <F label="订单编号" value={it.sub_order_no} onChange={(v) => updateItem(it._key, { sub_order_no: v as Str })} />
@@ -627,6 +659,7 @@ function NewParcelPage() {
                 <F label="运费补差（JPY）" type="number" value={it.freight_diff_jpy} onChange={(v) => updateItem(it._key, { freight_diff_jpy: v as Num })} />
                 <F label="支付方式" value={it.pay_method} onChange={(v) => updateItem(it._key, { pay_method: v as Str })} />
                 <F label="支付时间" type="datetime" value={it.pay_at} onChange={(v) => updateItem(it._key, { pay_at: v as Str })} />
+                </div>
               </div>
             </div>
           ))}
