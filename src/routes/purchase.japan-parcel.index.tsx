@@ -410,7 +410,10 @@ function JapanParcelList() {
                       key={r.id}
                       data-state={selected.has(r.id) ? "selected" : undefined}
                       className="cursor-pointer"
-                      onClick={() => setOpenCardId(r.id)}
+                      onClick={() => {
+                        setOpenTab("overview");
+                        setOpenCardId(r.id);
+                      }}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
@@ -427,7 +430,10 @@ function JapanParcelList() {
                             item_title_cn: it.item_title_cn,
                             item_image_url: it.item_image_url,
                           }))}
-                          onClick={() => setOpenCardId(r.id)}
+                          onClick={() => {
+                            setOpenTab("overview");
+                            setOpenCardId(r.id);
+                          }}
                         />
                       </TableCell>
                       <TableCell>
