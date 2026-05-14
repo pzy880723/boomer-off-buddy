@@ -248,9 +248,21 @@ export function ParcelEditPanel({
                 {it.item_title}
               </div>
             )}
-            <div className="mt-0.5 text-muted-foreground">
-              单价 {it.unit_price_jpy != null ? `¥${Number(it.unit_price_jpy).toLocaleString()}` : "—"}
-              {it.quantity ? ` × ${it.quantity}` : ""} · 入库 {it.weight_g ?? "—"}g
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+              <span>单价 {it.unit_price_jpy != null ? `¥${Number(it.unit_price_jpy).toLocaleString()}` : "—"}</span>
+              <span>× {it.quantity ?? "—"}</span>
+              <span>重 {it.weight_g ?? "—"}g</span>
+              <span>汇率 {it.exchange_rate ?? "—"}</span>
+            </div>
+            <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+              <span>手续费 {it.service_fee_jpy != null ? `¥${Number(it.service_fee_jpy).toLocaleString()}` : "—"}</span>
+              <span>国内运费 {it.domestic_freight_jpy != null ? `¥${Number(it.domestic_freight_jpy).toLocaleString()}` : "—"}</span>
+              <span>补差 {it.freight_diff_jpy != null ? `¥${Number(it.freight_diff_jpy).toLocaleString()}` : "—"}</span>
+            </div>
+            <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+              <span>支付 {it.pay_method || "—"}</span>
+              <span>时间 {it.pay_at ? new Date(it.pay_at).toLocaleString() : "—"}</span>
+              <span>商户单号 {it.merchant_order_no || "—"}</span>
             </div>
           </div>
         </div>
