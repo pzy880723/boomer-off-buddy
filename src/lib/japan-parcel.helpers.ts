@@ -82,3 +82,31 @@ export function formatCny(v: number | null | undefined): string {
   if (v == null) return "—";
   return `￥${Number(v).toLocaleString()}`;
 }
+
+// ===== UI 简化状态：仅「已采购 / 已签收」两档 =====
+export type SimpleStatus = "purchased" | "delivered";
+
+export function simplifyStatus(s: string | null | undefined): SimpleStatus {
+  return s === "delivered" || s === "completed" ? "delivered" : "purchased";
+}
+
+export const SIMPLE_STATUS_LABEL: Record<SimpleStatus, string> = {
+  purchased: "已采购",
+  delivered: "已签收",
+};
+
+// 包裹列表显示标题：优先取第一个子订单的中文标题
+export function getDisplayTitle(
+  parcel: { item_title?: string | null; item_title_cn?: string | null; source_order_no?: string | null },
+  items: { item_title?: string | null; item_title_cn?: string | null }[],
+): string {
+  const first = items[0];
+  return (
+    first?.item_title_cn ||
+    first?.item_title ||
+    parcel.item_title_cn ||
+    parcel.item_title ||
+    parcel.source_order_no ||
+    "(未命名包裹)"
+  );
+}
