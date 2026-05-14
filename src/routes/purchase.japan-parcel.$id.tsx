@@ -170,7 +170,61 @@ function ParcelDetail() {
           )}
         </div>
 
-        <ParcelForm initial={form} onChange={setForm} />
+        <div className="space-y-4">
+          <ParcelForm initial={form} onChange={setForm} />
+
+          {timeline.length > 0 && (
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="mb-3 text-sm font-semibold">状态时间线</h3>
+                <ul className="space-y-1.5 text-xs">
+                  {timeline.map((t, i) => (
+                    <li key={i} className="flex gap-3">
+                      <span className="w-40 font-mono text-muted-foreground">{t.at ?? "—"}</span>
+                      <span>{t.text ?? "—"}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+
+          {items.length > 0 && (
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="mb-3 text-sm font-semibold">
+                  子订单 <span className="font-normal text-muted-foreground">({items.length})</span>
+                </h3>
+                <div className="space-y-3">
+                  {items.map((it, idx) => (
+                    <div key={it.id} className="flex gap-3 rounded-md border p-3">
+                      {it.item_image_url ? (
+                        <img src={it.item_image_url} alt="" className="h-16 w-16 flex-shrink-0 rounded object-cover" />
+                      ) : (
+                        <div className="h-16 w-16 flex-shrink-0 rounded bg-muted" />
+                      )}
+                      <div className="min-w-0 flex-1 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-muted-foreground">#{idx + 1} · {it.sub_order_no || "无单号"}</span>
+                          <span className="font-mono">
+                            {it.item_total_jpy != null ? `¥${Number(it.item_total_jpy).toLocaleString()}` : "—"}
+                            {it.item_total_cny != null ? ` (≈￥${Number(it.item_total_cny).toLocaleString()})` : ""}
+                          </span>
+                        </div>
+                        <div className="mt-1 truncate text-sm font-medium">
+                          {it.item_title || it.item_title_cn || "(未命名)"}
+                        </div>
+                        <div className="mt-0.5 text-muted-foreground">
+                          {it.source_platform || "—"} · {it.condition || "—"} · 入库 {it.weight_g ?? "—"}g
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );
