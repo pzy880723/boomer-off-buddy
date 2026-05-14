@@ -34,6 +34,7 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import {
+  type AccountRow,
   createMerukiAccount,
   deleteMerukiAccount,
   listMerukiAccounts,
