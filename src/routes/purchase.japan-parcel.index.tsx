@@ -268,6 +268,29 @@ function JapanParcelList() {
         </CardContent>
       </Card>
 
+      {selected.size > 0 && (
+        <div className="mb-3 flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm">
+          <span>已选择 {selected.size} 条</span>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={bulkMut.isPending}
+              onClick={() => {
+                if (confirm(`确认删除选中的 ${selected.size} 条订单？此操作不可恢复。`))
+                  bulkMut.mutate(Array.from(selected));
+              }}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              批量删除
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardContent className="p-0">
           {list.isLoading ? (
@@ -281,6 +304,13 @@ function JapanParcelList() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[36px]">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={toggleAll}
+                      aria-label="全选"
+                    />
+                  </TableHead>
                   <TableHead className="w-[60px]">图</TableHead>
                   <TableHead>订单号 / 标题</TableHead>
                   <TableHead>卖家</TableHead>
@@ -289,6 +319,7 @@ function JapanParcelList() {
                   <TableHead className="text-right">合计 ￥</TableHead>
                   <TableHead>采购时间</TableHead>
                   <TableHead className="text-center">完整度</TableHead>
+                  <TableHead className="w-[100px] text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
