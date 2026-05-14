@@ -260,12 +260,32 @@ function ParcelDetail() {
                         <div className="h-16 w-16 flex-shrink-0 rounded bg-muted" />
                       )}
                       <div className="min-w-0 flex-1 text-xs">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2">
                           <span className="font-mono text-muted-foreground">#{idx + 1} · {it.sub_order_no || "无单号"}</span>
-                          <span className="font-mono">
-                            {it.item_total_jpy != null ? `¥${Number(it.item_total_jpy).toLocaleString()}` : "—"}
-                            {it.item_total_cny != null ? ` (≈￥${Number(it.item_total_cny).toLocaleString()})` : ""}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono">
+                              {it.item_total_jpy != null ? `¥${Number(it.item_total_jpy).toLocaleString()}` : "—"}
+                              {it.item_total_cny != null ? ` (≈￥${Number(it.item_total_cny).toLocaleString()})` : ""}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => setEditingItem(it as ItemRow)}
+                            >
+                              编辑
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs text-destructive"
+                              onClick={() => {
+                                if (confirm("删除此子订单？")) itemDelMut.mutate(it.id);
+                              }}
+                            >
+                              删除
+                            </Button>
+                          </div>
                         </div>
                         <div className="mt-1 truncate text-sm font-medium">
                           {it.item_title || it.item_title_cn || "(未命名)"}
