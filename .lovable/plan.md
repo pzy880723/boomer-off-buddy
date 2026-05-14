@@ -1,85 +1,122 @@
-# 日本小包裹 父子结构重构 + AI 解析升级
+# 日本小包裹"新建包裹"流程开发计划
 
-## 背景
+## 目标
 
-之前 `japan_parcels` 是扁平表，每行 = 一个商品。但实际 meruki 的"大包裹"是合单后的父订单（含国际物流单号、总重量、收货地址、状态时间线、国际物流费用明细），下挂多个子订单（每个子订单 = 一件商品 + 自己的商品费用）。
+把现有 `/purchase/japan-parcel/new` 改造成一个独立、完整的"新建包裹"工作台：
+- 顶部一个智能输入框，支持粘贴整段网页文字 **或** 截图，AI 识别后自动回填下面的字段
+- 表单分三大块：**订单信息**、**国际物流费用明细**、**子订单（包裹内物品）列表**
+- 子订单可手动新增/删除/编辑，每个子订单也支持单独的智能识别
+- 关税自动按所有子订单合计计算
+- 合计金额 = 子订单商品费总和 + 国际物流费总和 + 关税
+- 保存时一次性写入 `japan_parcels` 主表 + 多条 `japan_parcel_items` 子表
 
-需要按真实数据结构重建。
+## 入口
 
-## 数据模型
+`/purchase/japan-parcel` 列表页右上角"新建包裹"按钮 → 跳转 `/purchase/japan-parcel/new`，与"导入截图"按钮并列存在。
 
-### 表 1: `japan_parcels`（父：合单大包裹）
-保留原表，扩字段：
-- 订单基础：`source_order_no`(父单号 KHDZ...) `tracking_no`(国际物流单号 CN...JP) `status` `status_text`
-- 物流体积：`total_weight_g`(含包装) `volume_cm3` `max_side_cm` `storage_days`
-- 收货：`receiver_name` `receiver_phone` `receiver_address`
-- 国际物流费用明细（全部 JPY 数字 + 总价 CNY）：`intl_total_jpy` `intl_total_cny` `intl_freight_jpy` `intl_ship_method`(日本邮政海运件等) `intl_charge_method`(按重量) `intl_keep_packaging_jpy` `intl_reinforce_jpy` `intl_send_fee_jpy` `intl_photo_fee_jpy` `intl_merge_fee_jpy` `intl_points_used` `intl_pay_method` `intl_pay_at` `intl_merchant_order_no` `intl_exchange_rate`
-- 时间线：`status_timeline` (jsonb，存 `[{at, text}]`)
-- 旧字段（item_title 等扁平商品字段）保留为可空，做向后兼容
+## 页面结构
 
-### 表 2: `japan_parcel_items`（子：子订单）新建
-- `id` `parent_id`(→japan_parcels) `sub_order_no`(子单号 MYAY...) `position`
-- 商品：`source_platform`(JDirectItems Auction 等) `item_title`(原日文) `item_title_cn` `item_image_url` `condition`(二手/未使用) `addon_service` `unit_price_jpy` `quantity`
-- 费用：`item_total_jpy` `item_total_cny` `item_price_jpy` `service_fee_jpy` `domestic_freight_jpy` `freight_diff_jpy` `weight_g`(入库重量) `exchange_rate` `pay_method` `pay_at` `merchant_order_no`
-- RLS 同 japan_parcels
-
-迁移时把现有扁平行的商品字段搬成 1 条 item。
-
-## AI 解析重写
-
-`parseMerukiListScreenshot` 升级为 `parseMerukiParcelScreenshots`：
-- 入参改为 `images: [{ base64, mime_type }]`（一次接收多张截图，对应同一个大包裹的 4-5 张分块图）
-- 返回 schema：`{ parent: <父字段>, items: [<子字段>], status_timeline: [...] }`
-- prompt 重写，明确告诉模型这是"meruki 合单大包裹的多张分块截图，请合并识别为一个父订单+若干子订单"
-
-`importParsedOrders` 改成 `importParsedParcel`：
-- 父订单按 `source_order_no` 判重；存在则提示"已存在，跳过"
-- 不存在则插入父，再批量插入 items
-
-## 导入页 UI 升级
-
-`/purchase/japan-parcel/import`：
-
-1. **多图上传**：dropzone 支持一次拖入多张（4-5 张），全部归到同一个"大包裹"
-2. **进度条 + 步骤**（顶部 + 每张图）：
-   - 顶部总进度：`已上传 X 张 → 压缩中 → AI 识别中 → 入库`，4 步水平 stepper
-   - 每张图缩略图下方显示状态点：⬜ 待解析 / 🔵 上传中 / 🟡 解析中 / 🟢 完成 / 🔴 失败
-3. **解析失败处理**：每张图独立 try/catch，失败不阻塞其它图，显示原因；底部"重试失败"按钮
-4. **预览面板**：解析完成后，左边显示父订单字段（可编辑），右边列出所有子订单（可勾选/编辑/删除），底部"确认导入"
-
-## 详情页改造
-
-`/purchase/japan-parcel/$id`：
-- 顶部：父订单信息（物流单号、总重量、体积、收货地址、状态徽章）
-- 中间：状态时间线（竖向 timeline）
-- 下半：国际物流费用明细卡 + 子订单列表（卡片式，每张显示商品图/标题/单价/费用/重量）
-- 子订单点击展开编辑
-
-## 列表页
-
-保持现状但展示父订单：商品标题列改为"子订单数 + 第一个商品标题"，金额列用 `intl_total_cny + sum(items.item_total_cny)` 算实际成本。
+```text
+┌─ 新建小包裹订单 ────────── [返回] [保存] ┐
+│                                          │
+│ ┌─ 智能填写 ─────────────────────────┐  │
+│ │ [Tab: 粘贴文字 | 粘贴截图]          │  │
+│ │ ┌────────────────────────────────┐ │  │
+│ │ │ 文本框 / 截图拖拽区             │ │  │
+│ │ └────────────────────────────────┘ │  │
+│ │              [✨ 一键识别并填充]    │  │
+│ └────────────────────────────────────┘  │
+│                                          │
+│ ┌─ 订单信息 ─────────────────────────┐  │
+│ │ 来源订单号 / 国际物流单号 / 状态    │  │
+│ │ 重量(g) / 体积(cm³) / 最大边长(cm)  │  │
+│ │ 存储天数                            │  │
+│ │ 收货人 / 电话 / 地址                │  │
+│ └────────────────────────────────────┘  │
+│                                          │
+│ ┌─ 国际物流费用明细 ─────────────────┐  │
+│ │ 总计 JPY (≈CNY 自动算)              │  │
+│ │ 支付方式 / 支付时间 / 商户订单号     │  │
+│ │ 结算汇率                            │  │
+│ │ 国际物流费 / 发送方式 / 收费方式     │  │
+│ │ 保留原始包装 / 强化加固 / 发送手续费 │  │
+│ │ 拍照费 / 合单手续费 / 已使用积分     │  │
+│ └────────────────────────────────────┘  │
+│                                          │
+│ ┌─ 子订单（商品 N 件）   [+ 新增子订单] │
+│ │ ┌── 子订单 #1 ─────── [✨识别] [×] │ │
+│ │ │ 商品费用 JPY / ≈CNY               │ │
+│ │ │ 订单编号 / 支付方式 / 支付时间    │ │
+│ │ │ 商户订单号 / 入库重量 / 结算汇率  │ │
+│ │ │ 商品价格 / 手续费                 │ │
+│ │ │ 日本国内运费 / 运费补差           │ │
+│ │ └──────────────────────────────────┘ │
+│ │ ┌── 子订单 #2 ──────────────── [×] │ │
+│ │ └──────────────────────────────────┘ │
+│ └──────────────────────────────────────┘ │
+│                                          │
+│ ┌─ 合计 ─────────────────────────────┐  │
+│ │ 商品总额 X 日元                     │  │
+│ │ + 国际物流费 Y 日元                 │  │
+│ │ + 关税 Z 日元（按 X 自动算）        │  │
+│ │ ───────────────────────────         │  │
+│ │ = 合计 ¥XX,XXX (≈￥XXX)            │  │
+│ └────────────────────────────────────┘  │
+└──────────────────────────────────────────┘
+```
 
 ## 实施步骤
 
-1. 迁移：建 items 表 + 给 japan_parcels 加新字段 + 把现有行的商品字段搬到 items
-2. helpers/types：新增 `ParcelItem` 类型，computeCompleteness 改为父+子综合
-3. server fns：重写 parse/import + 增 items 的 CRUD
-4. AI prompt 重写，多图入参
-5. 导入页 UI（dropzone 多图 + stepper + 卡片预览）
-6. 详情页重构（父信息 + timeline + items 列表）
-7. 列表页金额/标题列适配
-8. 旧 `meruki_accounts` / extension 不动
+### 1. 数据库微调
+现有表结构基本够用，只补两件事：
+- 给 `japan_parcels` 新增 `tariff_jpy NUMERIC`、`tariff_cny NUMERIC`、`grand_total_jpy NUMERIC`、`grand_total_cny NUMERIC`（4 个金额汇总字段，方便列表/详情直接展示）
+- 关税计算规则使用一个常量，例如默认 `tariffRate = 0`（占位，可后续在设置中维护）。如不知确切规则，先做成"按子订单商品费总和 × 可配置百分比"，默认 0，UI 上仍展示该行。
+
+### 2. 抽出新组件
+- `src/components/parcel-info-section.tsx`：订单信息块
+- `src/components/parcel-intl-fee-section.tsx`：国际物流费用明细块
+- `src/components/parcel-item-card.tsx`：单个子订单卡片（含字段编辑 + 单独"识别"按钮 + 删除）
+- `src/components/parcel-totals.tsx`：底部合计
+- `src/components/smart-fill-box.tsx`：顶部智能输入框（文字/截图 Tab）
+
+### 3. 新增 AI 识别 server function
+在 `src/lib/ai.functions.ts` 新增：
+- `recognizeParcelText({ text })`：纯文字解析，返回 `{ parcel, intl_fee, items[] }` 三段结构（用 zod schema + `Output.object`）
+- `recognizeParcelBlock({ image_base64?, text? })`：统一入口，可二选一传入
+
+返回的 schema 字段和上面三段表单字段一一对齐。子订单解析为数组。
+
+### 4. 改写 `purchase.japan-parcel.new.tsx`
+- 顶部智能填写盒子，识别成功后 `setForm` 主表字段 + `setItems` 数组
+- 三段卡片渲染主表
+- 子订单区可 `+ 新增`、`×ml 删除`、单条"识别"
+- 底部合计实时随字段变化重算
+- 保存：
+  1. `createJapanParcel(主表 + 4 个汇总字段)` → 取 `id`
+  2. 遍历子订单 `createParcelItem({ parent_id: id, ... })`（新增 server function）
+  3. 全部成功 → toast + 跳详情页
+
+### 5. 新增子订单 server function
+`createParcelItem` / `bulkCreateParcelItems`，配合现有 `updateParcelItem`、`deleteParcelItem`。
+
+### 6. 列表页按钮调整
+`purchase.japan-parcel.index.tsx` 顶部已有"导入截图"按钮，并列加一个 `+ 新建包裹` → `/purchase/japan-parcel/new`。
+
+### 7. 详情页同步
+`purchase.japan-parcel.$id.tsx` 也展示新增的关税/合计字段，并允许"在已有包裹下新增子订单"按钮（复用 `parcel-item-card`）。
 
 ## 技术细节
 
-- AI 模型继续用 `google/gemini-2.5-pro`，多图通过 `messages[].content` 的多个 `{type:'image'}` 段一次性传给同一次调用（让模型自己拼接）
-- 状态时间线存 jsonb，避免再开一张表
-- 子订单 `parent_id` 加索引；`japan_parcels.source_order_no` 加 unique 索引便于判重
-- 进度条用本地 React state（`Map<imageId, status>`），不入库
+- **AI 模型**：沿用 `google/gemini-3-flash-preview`（识别截图），文字解析也用同一模型
+- **识别 schema** 用 zod 严格定义三段结构，避免脏数据落库
+- **合计计算**全部在前端 `useMemo` 完成，保存时再写入 4 个汇总字段（保证列表查询不必回表 sum）
+- **关税规则**先做成可配置常量 `TARIFF_RATE` 在 `japan-parcel.helpers.ts`，默认 0，后续接入设置
+- **金额换算**：所有 `xxx_cny` 字段在前端用 `结算汇率 × xxx_jpy` 实时显示，用户也可手动覆盖
+- 表单状态用受控 `useState`；子订单数组使用 `id: crypto.randomUUID()` 作为 key
+- AI 调用沿用现有 `recognizeParcelScreenshot` 模式（`createServerFn` + `Output.object`）
 
-## 暂不做
+## 不在本次范围
 
-- 截图自动分类（让用户手动一次拖完所有相关图）
-- 子订单状态独立流转（共用父状态）
-- Chrome 插件改造
-
+- 关税具体税率规则（先占位 0，等业务确认）
+- 子订单的"商品图片上传"（沿用现有 `item_image_url` 文本字段）
+- 自动汇率拉取（汇率仍由用户/AI 填入）
