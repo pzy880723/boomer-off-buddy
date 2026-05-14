@@ -217,10 +217,11 @@ function NewParcelPage() {
       return next;
     });
 
-  const mergeNonNull = <T extends Record<string, unknown>>(target: T, src: Record<string, unknown>): T => ({
-    ...target,
+  const mergeNonNull = <T,>(target: T, src: Record<string, unknown>): T => ({
+    ...(target as object),
     ...Object.fromEntries(Object.entries(src).filter(([, v]) => v != null)),
-  });
+  }) as T;
+
 
   const runPipeline = async () => {
     setRunning(true);
