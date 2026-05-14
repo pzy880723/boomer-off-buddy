@@ -124,7 +124,7 @@ function JapanParcelList() {
 
   type ListData = Awaited<ReturnType<typeof fetchList>>;
 
-  const allRows = (list.data?.rows ?? []) as ParcelRow[];
+  const allRows = (list.data?.rows ?? []) as unknown as ParcelRow[];
   // 客户端按简化状态筛选
   const rows = useMemo(
     () =>
