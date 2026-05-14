@@ -36,7 +36,58 @@ function ParcelDetail() {
   const update = useServerFn(updateJapanParcel);
   const del = useServerFn(deleteJapanParcel);
   const setStatus = useServerFn(updateJapanParcelStatus);
+  const updateItem = useServerFn(updateParcelItem);
+  const delItem = useServerFn(deleteParcelItem);
 
+  type ItemRow = {
+    id: string;
+    sub_order_no: string | null;
+    item_title: string | null;
+    item_title_cn: string | null;
+    item_image_url: string | null;
+    source_platform: string | null;
+    condition: string | null;
+    unit_price_jpy: number | null;
+    quantity: number | null;
+    item_total_jpy: number | null;
+    item_total_cny: number | null;
+    weight_g: number | null;
+  };
+  const [editingItem, setEditingItem] = useState<ItemRow | null>(null);
+
+  const itemSaveMut = useMutation({
+    mutationFn: (it: ItemRow) =>
+      updateItem({
+        data: {
+          id: it.id,
+          item_title: it.item_title,
+          item_title_cn: it.item_title_cn,
+          item_image_url: it.item_image_url,
+          unit_price_jpy: it.unit_price_jpy,
+          quantity: it.quantity,
+          item_total_jpy: it.item_total_jpy,
+          item_total_cny: it.item_total_cny,
+          weight_g: it.weight_g,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("子订单已更新");
+      setEditingItem(null);
+      qc.invalidateQueries({ queryKey: ["jp-parcel", id] });
+      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const itemDelMut = useMutation({
+    mutationFn: (itemId: string) => delItem({ data: { id: itemId } }),
+    onSuccess: () => {
+      toast.success("已删除子订单");
+      qc.invalidateQueries({ queryKey: ["jp-parcel", id] });
+      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
   const q = useQuery({
     queryKey: ["jp-parcel", id],
     queryFn: () => get({ data: { id } }),
