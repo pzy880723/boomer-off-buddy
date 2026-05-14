@@ -223,3 +223,28 @@ export const deleteParcelItem = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+export const createParcelItem = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => ItemCreateSchema.parse(input))
+  .handler(async ({ data }) => {
+    const { data: row, error } = await supabaseAdmin
+      .from("japan_parcel_items")
+      .insert(data)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return { row };
+  });
+
+export const bulkCreateParcelItems = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z.object({ items: z.array(ItemCreateSchema).min(1).max(100) }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { data: rows, error } = await supabaseAdmin
+      .from("japan_parcel_items")
+      .insert(data.items)
+      .select();
+    if (error) throw new Error(error.message);
+    return { rows: rows ?? [] };
+  });
