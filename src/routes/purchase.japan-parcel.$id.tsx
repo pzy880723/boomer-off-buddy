@@ -14,8 +14,9 @@ import {
   deleteJapanParcel,
   getJapanParcel,
   updateJapanParcel,
+  updateJapanParcelStatus,
 } from "@/lib/japan-parcel.functions";
-import { PARCEL_SOURCE_LABEL } from "@/lib/japan-parcel.helpers";
+import { PARCEL_SOURCE_LABEL, PARCEL_STATUS_OPTIONS } from "@/lib/japan-parcel.helpers";
 
 export const Route = createFileRoute("/purchase/japan-parcel/$id")({
   head: () => ({ meta: [{ title: "小包裹详情 · BOOMER OFF" }] }),
@@ -29,6 +30,7 @@ function ParcelDetail() {
   const get = useServerFn(getJapanParcel);
   const update = useServerFn(updateJapanParcel);
   const del = useServerFn(deleteJapanParcel);
+  const setStatus = useServerFn(updateJapanParcelStatus);
 
   const q = useQuery({
     queryKey: ["jp-parcel", id],
@@ -67,6 +69,16 @@ function ParcelDetail() {
     },
   });
 
+  const statusMut = useMutation({
+    mutationFn: (status: string) => setStatus({ data: { id, status } }),
+    onSuccess: () => {
+      toast.success("状态已更新");
+      qc.invalidateQueries({ queryKey: ["jp-parcel", id] });
+      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   if (q.isLoading) return <div className="p-10 text-center text-sm text-muted-foreground">加载中…</div>;
   const row = q.data?.row;
   if (!row) return <div className="p-10 text-center">未找到</div>;
@@ -90,6 +102,23 @@ function ParcelDetail() {
           </>
         }
       />
+
+      <Card className="mb-4">
+        <CardContent className="flex flex-wrap items-center gap-2 py-3">
+          <span className="mr-2 text-xs text-muted-foreground">快捷修改状态：</span>
+          {PARCEL_STATUS_OPTIONS.map((s) => (
+            <Button
+              key={s.value}
+              size="sm"
+              variant={row.status === s.value ? "default" : "outline"}
+              onClick={() => statusMut.mutate(s.value)}
+              disabled={statusMut.isPending || row.status === s.value}
+            >
+              {s.label}
+            </Button>
+          ))}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
         <div className="space-y-4">
