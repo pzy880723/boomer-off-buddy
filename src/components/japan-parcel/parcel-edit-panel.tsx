@@ -332,105 +332,15 @@ export function ParcelEditPanel({
       )}
 
       <Dialog open={!!editingItem} onOpenChange={(o) => !o && setEditingItem(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>编辑子订单</DialogTitle>
           </DialogHeader>
           {editingItem && (
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="col-span-2">
-                <Label className="text-xs">商品标题</Label>
-                <Input
-                  value={editingItem.item_title ?? ""}
-                  onChange={(e) =>
-                    setEditingItem({ ...editingItem, item_title: e.target.value })
-                  }
-                />
-              </div>
-              <div className="col-span-2">
-                <Label className="text-xs">中文标题</Label>
-                <Input
-                  value={editingItem.item_title_cn ?? ""}
-                  onChange={(e) =>
-                    setEditingItem({ ...editingItem, item_title_cn: e.target.value })
-                  }
-                />
-              </div>
-              <div className="col-span-2">
-                <Label className="text-xs">商品图 URL</Label>
-                <Input
-                  value={editingItem.item_image_url ?? ""}
-                  onChange={(e) =>
-                    setEditingItem({ ...editingItem, item_image_url: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <Label className="text-xs">单价 JPY</Label>
-                <Input
-                  type="number"
-                  value={editingItem.unit_price_jpy ?? ""}
-                  onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      unit_price_jpy: e.target.value === "" ? null : Number(e.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <Label className="text-xs">数量</Label>
-                <Input
-                  type="number"
-                  value={editingItem.quantity ?? ""}
-                  onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      quantity: e.target.value === "" ? null : Number(e.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <Label className="text-xs">合计 JPY</Label>
-                <Input
-                  type="number"
-                  value={editingItem.item_total_jpy ?? ""}
-                  onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      item_total_jpy: e.target.value === "" ? null : Number(e.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <Label className="text-xs">合计 CNY</Label>
-                <Input
-                  type="number"
-                  value={editingItem.item_total_cny ?? ""}
-                  onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      item_total_cny: e.target.value === "" ? null : Number(e.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <Label className="text-xs">入库重量 g</Label>
-                <Input
-                  type="number"
-                  value={editingItem.weight_g ?? ""}
-                  onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      weight_g: e.target.value === "" ? null : Number(e.target.value),
-                    })
-                  }
-                />
-              </div>
-            </div>
+            <ItemEditForm
+              value={editingItem}
+              onChange={(v) => setEditingItem(v)}
+            />
           )}
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setEditingItem(null)}>
@@ -446,6 +356,120 @@ export function ParcelEditPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function ItemField({
+  label,
+  type = "text",
+  value,
+  onChange,
+  colSpan = 1,
+}: {
+  label: string;
+  type?: "text" | "number" | "datetime" | "textarea";
+  value: string | number | null;
+  onChange: (v: string | number | null) => void;
+  colSpan?: 1 | 2;
+}) {
+  const wrap = colSpan === 2 ? "col-span-2" : "";
+  if (type === "textarea") {
+    return (
+      <div className={wrap}>
+        <Label className="text-xs">{label}</Label>
+        <textarea
+          rows={2}
+          className="mt-1 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+          value={(value as string) ?? ""}
+          onChange={(e) => onChange(e.target.value || null)}
+        />
+      </div>
+    );
+  }
+  if (type === "datetime") {
+    const local = value ? new Date(value as string).toISOString().slice(0, 16) : "";
+    return (
+      <div className={wrap}>
+        <Label className="text-xs">{label}</Label>
+        <Input
+          type="datetime-local"
+          value={local}
+          onChange={(e) =>
+            onChange(e.target.value ? new Date(e.target.value).toISOString() : null)
+          }
+        />
+      </div>
+    );
+  }
+  return (
+    <div className={wrap}>
+      <Label className="text-xs">{label}</Label>
+      <Input
+        type={type}
+        value={(value as string | number) ?? ""}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (type === "number") onChange(raw === "" ? null : Number(raw));
+          else onChange(raw || null);
+        }}
+      />
+    </div>
+  );
+}
+
+function ItemEditForm({
+  value,
+  onChange,
+}: {
+  value: ItemRow;
+  onChange: (v: ItemRow) => void;
+}) {
+  const set = <K extends keyof ItemRow>(k: K, v: ItemRow[K]) =>
+    onChange({ ...value, [k]: v });
+  return (
+    <div className="space-y-4">
+      <section>
+        <h4 className="mb-2 text-xs font-semibold text-muted-foreground">① 商品</h4>
+        <div className="grid grid-cols-2 gap-3">
+          <ItemField label="商品标题（日）" colSpan={2} value={value.item_title} onChange={(v) => set("item_title", v as string | null)} />
+          <ItemField label="商品标题（中）" colSpan={2} value={value.item_title_cn} onChange={(v) => set("item_title_cn", v as string | null)} />
+          <ItemField label="商品图 URL" colSpan={2} value={value.item_image_url} onChange={(v) => set("item_image_url", v as string | null)} />
+          <ItemField label="平台" value={value.source_platform} onChange={(v) => set("source_platform", v as string | null)} />
+          <ItemField label="成色 / 状态" value={value.condition} onChange={(v) => set("condition", v as string | null)} />
+          <ItemField label="附加服务" colSpan={2} value={value.addon_service} onChange={(v) => set("addon_service", v as string | null)} />
+        </div>
+      </section>
+      <section>
+        <h4 className="mb-2 text-xs font-semibold text-muted-foreground">② 价格与汇率</h4>
+        <div className="grid grid-cols-2 gap-3">
+          <ItemField label="商品价格 JPY" type="number" value={value.unit_price_jpy} onChange={(v) => set("unit_price_jpy", v as number | null)} />
+          <ItemField label="数量" type="number" value={value.quantity} onChange={(v) => set("quantity", v as number | null)} />
+          <ItemField label="商品费用 JPY" type="number" value={value.item_total_jpy} onChange={(v) => set("item_total_jpy", v as number | null)} />
+          <ItemField label="≈ CNY" type="number" value={value.item_total_cny} onChange={(v) => set("item_total_cny", v as number | null)} />
+          <ItemField label="结算汇率" type="number" value={value.exchange_rate} onChange={(v) => set("exchange_rate", v as number | null)} />
+          <ItemField label="单价（item_price_jpy）" type="number" value={value.item_price_jpy} onChange={(v) => set("item_price_jpy", v as number | null)} />
+        </div>
+      </section>
+      <section>
+        <h4 className="mb-2 text-xs font-semibold text-muted-foreground">③ 物流与重量</h4>
+        <div className="grid grid-cols-2 gap-3">
+          <ItemField label="入库重量 g" type="number" value={value.weight_g} onChange={(v) => set("weight_g", v as number | null)} />
+          <ItemField label="手续费 JPY" type="number" value={value.service_fee_jpy} onChange={(v) => set("service_fee_jpy", v as number | null)} />
+          <ItemField label="日本国内运费 JPY" type="number" value={value.domestic_freight_jpy} onChange={(v) => set("domestic_freight_jpy", v as number | null)} />
+          <ItemField label="运费补差 JPY" type="number" value={value.freight_diff_jpy} onChange={(v) => set("freight_diff_jpy", v as number | null)} />
+        </div>
+      </section>
+      <section>
+        <h4 className="mb-2 text-xs font-semibold text-muted-foreground">④ 支付与单号</h4>
+        <div className="grid grid-cols-2 gap-3">
+          <ItemField label="订单编号 sub_order_no" value={value.sub_order_no} onChange={(v) => set("sub_order_no", v as string | null)} />
+          <ItemField label="商户订单号" value={value.merchant_order_no} onChange={(v) => set("merchant_order_no", v as string | null)} />
+          <ItemField label="支付方式" value={value.pay_method} onChange={(v) => set("pay_method", v as string | null)} />
+          <ItemField label="支付时间" type="datetime" value={value.pay_at} onChange={(v) => set("pay_at", v as string | null)} />
+          <ItemField label="备注" type="textarea" colSpan={2} value={value.notes} onChange={(v) => set("notes", v as string | null)} />
+        </div>
+      </section>
     </div>
   );
 }
