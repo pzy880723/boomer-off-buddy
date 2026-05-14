@@ -28,10 +28,12 @@ import {
   extractIntlFee,
   extractSubItem,
 } from "@/lib/recognize.functions";
+import { translateTitles } from "@/lib/translate.functions";
 import {
   RecognizeTimeline,
   type TimelineStep,
 } from "@/components/japan-parcel/recognize-timeline";
+import { ItemImageUploader } from "@/components/japan-parcel/item-image-uploader";
 
 export const Route = createFileRoute("/purchase/japan-parcel/new")({
   head: () => ({ meta: [{ title: "新建小包裹 · BOOMER OFF" }] }),
@@ -194,6 +196,7 @@ function NewParcelPage() {
   const fnExtractParcel = useServerFn(extractParcelInfo);
   const fnExtractIntl = useServerFn(extractIntlFee);
   const fnExtractItem = useServerFn(extractSubItem);
+  const fnTranslate = useServerFn(translateTitles);
 
   const [parcel, setParcel] = useState<ParcelInfo>(emptyParcel());
   const [intl, setIntl] = useState<IntlFee>(emptyIntl());
