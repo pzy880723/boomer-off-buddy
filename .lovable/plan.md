@@ -1,65 +1,68 @@
+## 问题诊断
 
-## 背景
+1. **概览卡片乱**：当前 `ParcelCardDialog` 概览只用一个 4 列小网格塞了 4 个字段（物流单号 / 采购时间 / 商品数 / 合计），既没有完整的包裹订单信息，又把费用明细放在最下面 1 行 7 列里挤在一起。你要的"上面订单信息→运费明细→子订单→合计"完全没体现。
 
-`/purchase/japan-parcel` 列表加载慢，"编辑"目前是跳转 `/$id` 详情页。需要：
-1. 列表加载提速；
-2. 点击「编辑」改为弹出卡片编辑框，不跳页面；
-3. 编辑弹窗与详情页字段保持一致，"详情"和"编辑"展示相同的字段组。
+2. **编辑标签反人类**：编辑用的是旧的 `ParcelForm`，分组是「商品 / 价格 / 物流 / 备注」。这是早期"一个订单 = 一件商品"时代的字段，现在包裹本身没有"商品/卖家/品类/单价"——这些都在子订单里。所以你看到的"商品/价格/物流/备注"全是错位的旧字段，难怪无法理解。
 
-数据库实际只有 1 条包裹/2 个子订单，慢的原因不在数据量，而在前端拉取链路与字段冗余。
+## 修改方案（只动前端展示，不改数据库与 server 函数）
 
----
+### 1. 重写 `ParcelCardDialog` 的"概览"标签（src/components/japan-parcel/parcel-card-dialog.tsx）
 
-## 一、列表加载提速
+四段式纵向布局，每段一个区块卡片，标题清晰：
 
-`src/lib/japan-parcel.functions.ts` `listJapanParcels`
-- 把 `select("*")` 改成显式列表，**剔除 `raw_payload`**（每行可能几十 KB 的截图原始 JSON 是首屏卡顿元凶）和列表用不到的长字段。
-- 子查询也只 select 列表/弹窗悬浮预览必需的列（已经精简，保持）。
+```text
+┌─────────────────────────────────────────┐
+│ ① 包裹信息                              │
+│   订单号 / 物流单号 / 平台订单号        │
+│   采购时间 / 状态 / 备注 / 收件地址     │
+├─────────────────────────────────────────┤
+│ ② 国际物流费用明细                      │
+│   运费 加固 合单 发送 拍照 保留包装     │
+│   积分抵扣 关税 汇率 支付方式 支付时间  │
+│   小计：JPY xxx ≈ CNY xxx               │
+├─────────────────────────────────────────┤
+│ ③ 子订单信息  (N)                       │
+│   每行：图 + 中文标题(日文小字) + 单价×数量 + 小计
+│   小计：商品总额 JPY xxx                │
+├─────────────────────────────────────────┤
+│ ④ 合计费用                              │
+│   商品总额 + 国际物流小计 + 关税        │
+│   = 合计 JPY xxx ≈ CNY xxx (大字突出)   │
+└─────────────────────────────────────────┘
+```
 
-`src/routes/purchase.japan-parcel.index.tsx`
-- 给 Route 加 **loader**：`context.queryClient.ensureQueryData(...)`，配合 `useQuery` 的相同 queryKey，做 SSR/导航预取，首次进入不再等客户端 RTT。
-- 列表行的"编辑/详情"链接加 `preload="intent"`（虽然改成弹窗后不再跳转，但保留给浏览器地址栏直接访问的场景）。
-- 懒翻译副作用里**去掉 `qc.invalidateQueries`**，改为 `qc.setQueryData` 本地合并翻译结果，避免翻译完成后立刻再发一次列表请求。
-- `staleTime` 从 30s 提到 60s，同时给 `useQuery` 加 `refetchOnWindowFocus: false`。
+### 2. 新建 `ParcelEditSections` 组件，替换旧 `ParcelForm`
 
----
+新文件 `src/components/japan-parcel/parcel-edit-sections.tsx`，与上述概览同结构、同顺序的 4 段，每段内部把字段改为可编辑：
 
-## 二、编辑改为弹窗 + 与详情字段对齐
+- **① 包裹信息**：`source_order_no`、`tracking_no`、`intl_merchant_order_no`、`purchased_at`、`status`(下拉)、`notes`、收件相关字段（如 `receiver_name`、`warehouse_location`）。
+- **② 国际物流费用明细**：`intl_freight_jpy`、`intl_reinforce_jpy`、`intl_merge_fee_jpy`、`intl_send_fee_jpy`、`intl_photo_fee_jpy`、`intl_keep_packaging_jpy`、`intl_points_used`、`tariff_jpy`、`intl_exchange_rate`、`intl_ship_method`、`intl_charge_method`、`intl_pay_method`、`intl_pay_at`、`intl_total_jpy`、`intl_total_cny`。
+- **③ 子订单**：复用现有的子订单列表 + 行内"编辑/删除"按钮和子订单编辑弹窗（已有逻辑保留）。
+- **④ 合计**：`grand_total_jpy`、`grand_total_cny` 两个数字输入；旁边显示一个根据上面字段自动算出的"建议值"提示（不强制覆盖，方便人工核对）。
 
-### 抽取共享组件 `src/components/japan-parcel/parcel-edit-panel.tsx`
-把当前 `purchase.japan-parcel.$id.tsx` 里"详情正文"的 JSX 抽成一个纯展示/编辑组件，接收 `parcelId`、`onClose?` 作为 props，内部自己用 `useQuery(['jp-parcel', id])` 拉详情、用各 mutation 写回。包含的区块（与现有详情页一致）：
-- 左栏卡片：主图、状态徽章、完成度环、总价/物流单号/创建时间小表
-- 原始数据折叠（如有）
-- 右栏：
-  - `<ParcelForm>`（所有字段：商品、价格、物流、收货、国际物流费用明细、关税、备注）
-  - 状态时间线
-  - 子订单列表 + "编辑子订单"嵌套 Dialog
-- 底部操作：保存 / 删除 / 快捷状态切换
+旧 `ParcelForm` 中"商品 / 卖家 / 品类 / 单价 / 服务费 / 国内运费 / 重量"等单商品字段**不再在编辑界面出现**（数据保留在 DB 不动），因为它们对"包裹"概念无意义。
 
-### 改造 `ParcelCardDialog` → 详情/编辑二合一
-当前 `ParcelCardDialog` 只展示费用摘要，字段比详情页少。改造方案：
-- Dialog 内放一个 `Tabs`：**"概览"** = 现有摘要卡片（合计、费用明细、商品网格）；**"编辑"** = 上面新建的 `<ParcelEditPanel parcelId={parcel.id} onClose={...} />`。
-- 默认打开「概览」；列表行的 ✏️ 编辑按钮直接打开并切到「编辑」Tab。
-- Dialog 容器调宽到 `max-w-5xl`，高度 `max-h-[90vh] overflow-y-auto`。
+### 3. 简化 `ParcelEditPanel`（src/components/japan-parcel/parcel-edit-panel.tsx）
 
-### 列表交互
-`purchase.japan-parcel.index.tsx`
-- 行点击 → 打开弹窗（默认"概览"Tab）。
-- ✏️ 编辑按钮 → 打开弹窗 + 直接切到"编辑"Tab（不再 `<Link>` 跳转）。
-- 保留 `purchase.japan-parcel.$id.tsx` 路由可直接访问（深链/分享），其内部直接渲染同一个 `<ParcelEditPanel>`，避免逻辑分裂。
+- 顶部保留：快捷状态切换条 + 保存 + 删除。
+- 删除：左侧旧的"商品图 / 完成度环 / 总价小卡 / raw_payload" 整列（compact 模式本来也没显示，详情页也一并精简）。
+- 主体直接渲染 `<ParcelEditSections>`。状态时间线挪到 ① 包裹信息卡片底部一个折叠区里。
 
----
+### 4. 让"概览"和"编辑"完全对齐
 
-## 三、文件改动清单
+两个 Tab 用同一组分段标题与同一种字段顺序，区别只是「只读 vs 可编辑」，避免再出现"概览看到的字段和编辑里看到的字段对不上"。
 
-- 新增 `src/components/japan-parcel/parcel-edit-panel.tsx`
-- 改 `src/components/japan-parcel/parcel-card-dialog.tsx`：加 Tabs，新增 `defaultTab` prop，宽度调大
-- 改 `src/routes/purchase.japan-parcel.index.tsx`：加 loader、改编辑按钮逻辑、调整翻译副作用、`preload="intent"`
-- 改 `src/routes/purchase.japan-parcel.$id.tsx`：瘦身为薄壳路由，渲染 `<ParcelEditPanel parcelId={id}/>`
-- 改 `src/lib/japan-parcel.functions.ts`：`listJapanParcels` 的 `select` 列表收窄，剔除 `raw_payload`
+## 涉及文件
 
-## 不动
+- `src/components/japan-parcel/parcel-card-dialog.tsx`（重写概览 Tab）
+- `src/components/japan-parcel/parcel-edit-sections.tsx`（**新建**）
+- `src/components/japan-parcel/parcel-edit-panel.tsx`（用新组件替换 `ParcelForm`，去掉左栏冗余卡）
+- `src/routes/purchase.japan-parcel.$id.tsx`（保持当前的极简 wrapper，不需要再改）
 
-- 数据库结构、RLS、识别管线、新增包裹页 `/new`。
-- 详情页路由本身仍然存在，行为只是从"独立大页面"变成"弹窗的同一面板"，没有功能丢失。
+不改：server 函数、数据库 schema、`ParcelForm`（其它地方如 `/new` 仍可能用到，先留着不删）。
 
+## 验收
+
+- 点击列表行 → 弹窗"概览"上到下依次是：包裹信息 → 国际物流费用明细 → 子订单 → 合计费用。
+- 点击 ✏️ → 弹窗"编辑"是同样 4 段，且字段与"概览"一一对应；不再出现"商品/价格/物流/备注"四标签。
+- 子订单区域仍可单独编辑/删除每个商品。
