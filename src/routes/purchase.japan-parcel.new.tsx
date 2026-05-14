@@ -21,7 +21,17 @@ import { PageHeader } from "@/components/page-header";
 import { ScreenshotDropzone } from "@/components/screenshot-dropzone";
 import { PARCEL_STATUS_OPTIONS, formatJpy, formatCny } from "@/lib/japan-parcel.helpers";
 import { createJapanParcel, bulkCreateParcelItems } from "@/lib/japan-parcel.functions";
-import { recognizeParcelBlock } from "@/lib/ai.functions";
+import {
+  segmentParcelText,
+  ocrAndSegment,
+  extractParcelInfo,
+  extractIntlFee,
+  extractSubItem,
+} from "@/lib/recognize.functions";
+import {
+  RecognizeTimeline,
+  type TimelineStep,
+} from "@/components/japan-parcel/recognize-timeline";
 
 export const Route = createFileRoute("/purchase/japan-parcel/new")({
   head: () => ({ meta: [{ title: "新建小包裹 · BOOMER OFF" }] }),
@@ -179,7 +189,11 @@ function NewParcelPage() {
   const nav = useNavigate();
   const create = useServerFn(createJapanParcel);
   const bulkItems = useServerFn(bulkCreateParcelItems);
-  const recognize = useServerFn(recognizeParcelBlock);
+  const fnSegmentText = useServerFn(segmentParcelText);
+  const fnOcrSegment = useServerFn(ocrAndSegment);
+  const fnExtractParcel = useServerFn(extractParcelInfo);
+  const fnExtractIntl = useServerFn(extractIntlFee);
+  const fnExtractItem = useServerFn(extractSubItem);
 
   const [parcel, setParcel] = useState<ParcelInfo>(emptyParcel());
   const [intl, setIntl] = useState<IntlFee>(emptyIntl());
@@ -190,45 +204,168 @@ function NewParcelPage() {
   const [smartImage, setSmartImage] = useState<string | null>(null);
   const [usedAi, setUsedAi] = useState(false);
 
-  // ====== Smart fill ======
-  const recogMut = useMutation({
-    mutationFn: () =>
-      recognize({
-        data: {
-          text: smartTab === "text" && smartText.trim() ? smartText.trim() : undefined,
-          image_base64: smartTab === "image" && smartImage ? smartImage : undefined,
-          mime_type: "image/png",
-        },
-      }),
-    onSuccess: (r) => {
-      if (!r.ok) {
-        toast.error(`识别失败：${r.reason}`);
-        return;
+  // ====== Pipeline timeline ======
+  const [tlSteps, setTlSteps] = useState<TimelineStep[]>([]);
+  const [running, setRunning] = useState(false);
+
+  const upsertStep = (s: TimelineStep) =>
+    setTlSteps((arr) => {
+      const i = arr.findIndex((x) => x.id === s.id);
+      if (i < 0) return [...arr, s];
+      const next = arr.slice();
+      next[i] = { ...next[i], ...s };
+      return next;
+    });
+
+  const mergeNonNull = <T,>(target: T, src: Record<string, unknown>): T => ({
+    ...(target as object),
+    ...Object.fromEntries(Object.entries(src).filter(([, v]) => v != null)),
+  }) as T;
+
+
+  const runPipeline = async () => {
+    setRunning(true);
+    setTlSteps([]);
+    const startedAt = Date.now();
+    try {
+      // ===== Step 1: 预处理 + 分段（或 OCR + 分段） =====
+      let segments: { parcel_block: string | null; intl_fee_block: string | null; item_blocks: string[]; raw_chars: number; cleaned_chars: number };
+      if (smartTab === "image" && smartImage) {
+        upsertStep({ id: "ocr", label: "图片 OCR", status: "running", detail: "调用视觉模型读取文字…" });
+        const t0 = Date.now();
+        const r = await fnOcrSegment({ data: { image_base64: smartImage, mime_type: "image/png" } });
+        if (!r.ok) {
+          upsertStep({ id: "ocr", label: "图片 OCR", status: "error", errorMsg: r.reason, durationMs: Date.now() - t0 });
+          throw new Error(r.reason);
+        }
+        segments = r.segments;
+        upsertStep({
+          id: "ocr",
+          label: "图片 OCR",
+          status: "done",
+          detail: `读取 ${r.ocr_text.length} 字符`,
+          durationMs: Date.now() - t0,
+          payload: { ocr_text: r.ocr_text.slice(0, 500) + (r.ocr_text.length > 500 ? "…" : "") },
+        });
+      } else {
+        upsertStep({ id: "seg", label: "预处理 + 分段", status: "running" });
+        const t0 = Date.now();
+        const r = await fnSegmentText({ data: { text: smartText.trim() } });
+        segments = r.segments;
+        upsertStep({
+          id: "seg",
+          label: "预处理 + 分段",
+          status: "done",
+          detail: `去噪 ${segments.raw_chars} → ${segments.cleaned_chars} 字符`,
+          durationMs: Date.now() - t0,
+        });
       }
-      const out = r.data;
-      if (out.parcel)
-        setParcel((p) => ({
-          ...p,
-          ...Object.fromEntries(Object.entries(out.parcel!).filter(([, v]) => v != null)),
-        }));
-      if (out.intl_fee)
-        setIntl((i) => ({
-          ...i,
-          ...Object.fromEntries(Object.entries(out.intl_fee!).filter(([, v]) => v != null)),
-        }));
-      if (out.items?.length) {
-        setItems(
-          out.items.map((it) => ({
-            ...emptyItem(),
-            ...Object.fromEntries(Object.entries(it).filter(([, v]) => v != null)),
-          })),
+
+      const segSummary = `parcel:${segments.parcel_block ? "✓" : "✗"} · intl:${segments.intl_fee_block ? "✓" : "✗"} · 子订单 ${segments.item_blocks.length}`;
+      upsertStep({
+        id: "seg-result",
+        label: "区块识别",
+        status: segments.parcel_block || segments.item_blocks.length ? "done" : "warn",
+        detail: segSummary,
+        payload: {
+          parcel_block: segments.parcel_block?.slice(0, 200),
+          intl_fee_block: segments.intl_fee_block?.slice(0, 200),
+          item_blocks_count: segments.item_blocks.length,
+        },
+      });
+
+      // ===== Step 2: 并发抽 parcel / intl_fee / 每个 item =====
+      const tasks: Promise<unknown>[] = [];
+      let parcelData: Record<string, unknown> | null = null;
+      let intlData: Record<string, unknown> | null = null;
+      const itemsData: Array<Record<string, unknown> | null> = new Array(segments.item_blocks.length).fill(null);
+
+      if (segments.parcel_block) {
+        upsertStep({ id: "ex-parcel", label: "抽取：包裹信息", status: "running" });
+        const t0 = Date.now();
+        tasks.push(
+          fnExtractParcel({ data: { block: segments.parcel_block } }).then((r) => {
+            parcelData = r.data as Record<string, unknown>;
+            const filled = Object.values(r.data).filter((v) => v != null).length;
+            upsertStep({
+              id: "ex-parcel",
+              label: "抽取：包裹信息",
+              status: r.ok ? "done" : "warn",
+              detail: `${filled} 字段 · ${r.model.split("/").pop()}${r.attempts > 1 ? ` · 重试${r.attempts}` : ""}`,
+              durationMs: Date.now() - t0,
+              payload: r.data,
+              errorMsg: r.ok ? undefined : r.reason,
+            });
+          }),
         );
       }
+
+      if (segments.intl_fee_block) {
+        upsertStep({ id: "ex-intl", label: "抽取：国际物流费用", status: "running" });
+        const t0 = Date.now();
+        tasks.push(
+          fnExtractIntl({ data: { block: segments.intl_fee_block } }).then((r) => {
+            intlData = r.data as Record<string, unknown>;
+            const filled = Object.values(r.data).filter((v) => v != null).length;
+            upsertStep({
+              id: "ex-intl",
+              label: "抽取：国际物流费用",
+              status: r.ok ? "done" : "warn",
+              detail: `${filled} 字段 · ${r.model.split("/").pop()}${r.attempts > 1 ? ` · 重试${r.attempts}` : ""}`,
+              durationMs: Date.now() - t0,
+              payload: r.data,
+              errorMsg: r.ok ? undefined : r.reason,
+            });
+          }),
+        );
+      }
+
+      segments.item_blocks.forEach((blk, idx) => {
+        const id = `ex-item-${idx}`;
+        upsertStep({ id, label: `抽取：子订单 #${idx + 1}`, status: "running" });
+        const t0 = Date.now();
+        tasks.push(
+          fnExtractItem({ data: { block: blk, index: idx } }).then((r) => {
+            itemsData[idx] = r.data as Record<string, unknown>;
+            const filled = Object.values(r.data).filter((v) => v != null).length;
+            upsertStep({
+              id,
+              label: `抽取：子订单 #${idx + 1}`,
+              status: r.ok ? "done" : "warn",
+              detail: `${filled} 字段 · ${r.model.split("/").pop()}${r.attempts > 1 ? ` · 重试${r.attempts}` : ""}`,
+              durationMs: Date.now() - t0,
+              payload: r.data,
+              errorMsg: r.ok ? undefined : r.reason,
+            });
+          }),
+        );
+      });
+
+      await Promise.all(tasks);
+
+      // ===== Step 3: 写入表单 =====
+      if (parcelData) setParcel((p) => mergeNonNull(p, parcelData!));
+      if (intlData) setIntl((i) => mergeNonNull(i, intlData!));
+      const validItems = itemsData.filter(Boolean) as Record<string, unknown>[];
+      if (validItems.length) {
+        setItems(validItems.map((it) => mergeNonNull(emptyItem(), it) as SubItem));
+      }
       setUsedAi(true);
-      toast.success(`识别完成，共 ${out.items?.length ?? 0} 个子订单`);
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
+
+      upsertStep({
+        id: "done",
+        label: "完成",
+        status: "done",
+        detail: `共 ${validItems.length} 个子订单 · 总耗时 ${(((Date.now() - startedAt) / 1000)).toFixed(1)}s`,
+      });
+      toast.success(`识别完成，共 ${validItems.length} 个子订单`);
+    } catch (e) {
+      upsertStep({ id: "fail", label: "识别失败", status: "error", errorMsg: (e as Error).message });
+      toast.error((e as Error).message);
+    } finally {
+      setRunning(false);
+    }
+  };
 
   // ====== Totals ======
   const totals = useMemo(() => {
@@ -344,15 +481,20 @@ function NewParcelPage() {
               size="sm"
               className="bg-gradient-brand hover:opacity-90"
               disabled={
-                recogMut.isPending ||
-                (smartTab === "text" ? !smartText.trim() : !smartImage)
+                running || (smartTab === "text" ? !smartText.trim() : !smartImage)
               }
-              onClick={() => recogMut.mutate()}
+              onClick={runPipeline}
             >
               <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              {recogMut.isPending ? "识别中…" : "一键识别并填充"}
+              {running ? "识别中…" : "一键识别并填充"}
             </Button>
           </div>
+
+          {tlSteps.length > 0 && (
+            <div className="mt-3">
+              <RecognizeTimeline steps={tlSteps} />
+            </div>
+          )}
         </CardContent>
       </Card>
 

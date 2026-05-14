@@ -1,122 +1,149 @@
-# 日本小包裹"新建包裹"流程开发计划
+# 智能识别升级方案
 
-## 目标
+## 问题诊断
 
-把现有 `/purchase/japan-parcel/new` 改造成一个独立、完整的"新建包裹"工作台：
-- 顶部一个智能输入框，支持粘贴整段网页文字 **或** 截图，AI 识别后自动回填下面的字段
-- 表单分三大块：**订单信息**、**国际物流费用明细**、**子订单（包裹内物品）列表**
-- 子订单可手动新增/删除/编辑，每个子订单也支持单独的智能识别
-- 关税自动按所有子订单合计计算
-- 合计金额 = 子订单商品费总和 + 国际物流费总和 + 关税
-- 保存时一次性写入 `japan_parcels` 主表 + 多条 `japan_parcel_items` 子表
+当前一次性把全部文字/截图丢给 `recognizeParcelBlock` 让模型同时输出 parcel + intl_fee + items[]，准确率低的原因：
 
-## 入口
+1. 粘贴文字里大量噪声（导航、广告、推荐位、按钮文字）干扰模型
+2. 没有利用 meruki 页面天然的"区块标题"结构（订单详情 / 国际物流费用明细 / 商品费用 ×N）
+3. 一次输出 schema 太大，items 数组容易丢字段或漏件
+4. 用户看不到中间过程，失败时不知道哪一步出错，也无法修
 
-`/purchase/japan-parcel` 列表页右上角"新建包裹"按钮 → 跳转 `/purchase/japan-parcel/new`，与"导入截图"按钮并列存在。
+## 方案：两步识别管线 + 可视化时间线
 
-## 页面结构
+### 第一步：分段（Segmenter）
+
+不依赖 AI，本地用正则/关键词把粘贴文本切成结构化区块：
 
 ```text
-┌─ 新建小包裹订单 ────────── [返回] [保存] ┐
-│                                          │
-│ ┌─ 智能填写 ─────────────────────────┐  │
-│ │ [Tab: 粘贴文字 | 粘贴截图]          │  │
-│ │ ┌────────────────────────────────┐ │  │
-│ │ │ 文本框 / 截图拖拽区             │ │  │
-│ │ └────────────────────────────────┘ │  │
-│ │              [✨ 一键识别并填充]    │  │
-│ └────────────────────────────────────┘  │
-│                                          │
-│ ┌─ 订单信息 ─────────────────────────┐  │
-│ │ 来源订单号 / 国际物流单号 / 状态    │  │
-│ │ 重量(g) / 体积(cm³) / 最大边长(cm)  │  │
-│ │ 存储天数                            │  │
-│ │ 收货人 / 电话 / 地址                │  │
-│ └────────────────────────────────────┘  │
-│                                          │
-│ ┌─ 国际物流费用明细 ─────────────────┐  │
-│ │ 总计 JPY (≈CNY 自动算)              │  │
-│ │ 支付方式 / 支付时间 / 商户订单号     │  │
-│ │ 结算汇率                            │  │
-│ │ 国际物流费 / 发送方式 / 收费方式     │  │
-│ │ 保留原始包装 / 强化加固 / 发送手续费 │  │
-│ │ 拍照费 / 合单手续费 / 已使用积分     │  │
-│ └────────────────────────────────────┘  │
-│                                          │
-│ ┌─ 子订单（商品 N 件）   [+ 新增子订单] │
-│ │ ┌── 子订单 #1 ─────── [✨识别] [×] │ │
-│ │ │ 商品费用 JPY / ≈CNY               │ │
-│ │ │ 订单编号 / 支付方式 / 支付时间    │ │
-│ │ │ 商户订单号 / 入库重量 / 结算汇率  │ │
-│ │ │ 商品价格 / 手续费                 │ │
-│ │ │ 日本国内运费 / 运费补差           │ │
-│ │ └──────────────────────────────────┘ │
-│ │ ┌── 子订单 #2 ──────────────── [×] │ │
-│ │ └──────────────────────────────────┘ │
-│ └──────────────────────────────────────┘ │
-│                                          │
-│ ┌─ 合计 ─────────────────────────────┐  │
-│ │ 商品总额 X 日元                     │  │
-│ │ + 国际物流费 Y 日元                 │  │
-│ │ + 关税 Z 日元（按 X 自动算）        │  │
-│ │ ───────────────────────────         │  │
-│ │ = 合计 ¥XX,XXX (≈￥XXX)            │  │
-│ └────────────────────────────────────┘  │
-└──────────────────────────────────────────┘
+原始文本
+  ↓ 去噪（去导航/页脚/重复空行）
+  ↓ 按锚点切分
+{
+  parcel_block:    "订单详情" 段（订单号/物流单号/状态/重量体积/收货地址）
+  intl_fee_block:  "国际物流费用明细" 段（含金额/支付/发送方式 …）
+  item_blocks:     ["商品费用 6000日元 …", "商品费用 …", …]   // 每个子订单一段
+}
 ```
 
-## 实施步骤
+锚点关键词（可在 skill 里维护）：
+- parcel：`订单信息` / `订单号` / `国际物流单号` / `收货地址`
+- intl_fee：`国际物流费用总计` / `国际物流费用明细`
+- item：`商品费用` / `订单编号` + `商户订单号` 配对出现
 
-### 1. 数据库微调
-现有表结构基本够用，只补两件事：
-- 给 `japan_parcels` 新增 `tariff_jpy NUMERIC`、`tariff_cny NUMERIC`、`grand_total_jpy NUMERIC`、`grand_total_cny NUMERIC`（4 个金额汇总字段，方便列表/详情直接展示）
-- 关税计算规则使用一个常量，例如默认 `tariffRate = 0`（占位，可后续在设置中维护）。如不知确切规则，先做成"按子订单商品费总和 × 可配置百分比"，默认 0，UI 上仍展示该行。
+截图模式：第一步改为先调一次 vision 模型只做"OCR + 分段"，把原始文字 + 段落标记吐回来。
 
-### 2. 抽出新组件
-- `src/components/parcel-info-section.tsx`：订单信息块
-- `src/components/parcel-intl-fee-section.tsx`：国际物流费用明细块
-- `src/components/parcel-item-card.tsx`：单个子订单卡片（含字段编辑 + 单独"识别"按钮 + 删除）
-- `src/components/parcel-totals.tsx`：底部合计
-- `src/components/smart-fill-box.tsx`：顶部智能输入框（文字/截图 Tab）
+### 第二步：分块抽取（Extractor）
 
-### 3. 新增 AI 识别 server function
-在 `src/lib/ai.functions.ts` 新增：
-- `recognizeParcelText({ text })`：纯文字解析，返回 `{ parcel, intl_fee, items[] }` 三段结构（用 zod schema + `Output.object`）
-- `recognizeParcelBlock({ image_base64?, text? })`：统一入口，可二选一传入
+对每个区块独立调用一次结构化抽取，schema 比现在小得多，准确率高：
 
-返回的 schema 字段和上面三段表单字段一一对齐。子订单解析为数组。
+- `extractParcel(parcel_block)` → ParcelInfo
+- `extractIntlFee(intl_fee_block)` → IntlFee
+- `extractItem(item_block)` → SubItem  （并发 N 次，每个子订单一次）
 
-### 4. 改写 `purchase.japan-parcel.new.tsx`
-- 顶部智能填写盒子，识别成功后 `setForm` 主表字段 + `setItems` 数组
-- 三段卡片渲染主表
-- 子订单区可 `+ 新增`、`×ml 删除`、单条"识别"
-- 底部合计实时随字段变化重算
-- 保存：
-  1. `createJapanParcel(主表 + 4 个汇总字段)` → 取 `id`
-  2. 遍历子订单 `createParcelItem({ parent_id: id, ... })`（新增 server function）
-  3. 全部成功 → toast + 跳详情页
+每次都用：
+- 较小的 zod schema（更聚焦）
+- 1-2 条 few-shot 示例（prompt 内嵌真实样本）
+- 后处理：金额去逗号/¥/円、日期归一 ISO、汇率正则补抽
 
-### 5. 新增子订单 server function
-`createParcelItem` / `bulkCreateParcelItems`，配合现有 `updateParcelItem`、`deleteParcelItem`。
+### 第三步：校验与修复
 
-### 6. 列表页按钮调整
-`purchase.japan-parcel.index.tsx` 顶部已有"导入截图"按钮，并列加一个 `+ 新建包裹` → `/purchase/japan-parcel/new`。
+- schema 通过 → 直接填表
+- 关键字段缺失（如 item.item_total_jpy 为空）→ 对该块重试一次（可换 gemini-2.5-pro）
+- 全部失败 → 把原文段落和报错回显给用户
 
-### 7. 详情页同步
-`purchase.japan-parcel.$id.tsx` 也展示新增的关税/合计字段，并允许"在已有包裹下新增子订单"按钮（复用 `parcel-item-card`）。
+### 服务端实现
 
-## 技术细节
+新增 `src/lib/recognize.functions.ts`：
 
-- **AI 模型**：沿用 `google/gemini-3-flash-preview`（识别截图），文字解析也用同一模型
-- **识别 schema** 用 zod 严格定义三段结构，避免脏数据落库
-- **合计计算**全部在前端 `useMemo` 完成，保存时再写入 4 个汇总字段（保证列表查询不必回表 sum）
-- **关税规则**先做成可配置常量 `TARIFF_RATE` 在 `japan-parcel.helpers.ts`，默认 0，后续接入设置
-- **金额换算**：所有 `xxx_cny` 字段在前端用 `结算汇率 × xxx_jpy` 实时显示，用户也可手动覆盖
-- 表单状态用受控 `useState`；子订单数组使用 `id: crypto.randomUUID()` 作为 key
-- AI 调用沿用现有 `recognizeParcelScreenshot` 模式（`createServerFn` + `Output.object`）
+```ts
+recognizeParcelPipeline({ text?, image_base64? })
+  → AsyncIterable<{ step, status, data?, error? }>   // 流式
+```
 
-## 不在本次范围
+用 TanStack server route `/api/public/recognize-parcel`（SSE）流式吐出每一步事件，比改 createServerFn 流式更直接。
 
-- 关税具体税率规则（先占位 0，等业务确认）
-- 子订单的"商品图片上传"（沿用现有 `item_image_url` 文本字段）
-- 自动汇率拉取（汇率仍由用户/AI 填入）
+事件类型：
+```
+{ step:"preprocess",   status:"running"|"done"  }
+{ step:"segment",      status:"done", data:{ parcel:bool, intl:bool, items:N } }
+{ step:"extract_parcel", status:"done", data:{...} }
+{ step:"extract_intl",   status:"done", data:{...} }
+{ step:"extract_item",   status:"done", index, data:{...} }   // ×N
+{ step:"validate",     status:"done", data:{ filled, missing:[...] } }
+{ step:"complete",     status:"done", data:{ parcel, intl_fee, items[] } }
+```
+
+### 前端 UI：分析时间线
+
+把现在的"识别中…"按钮换成一张展开式时间线卡片：
+
+```text
+✓ 预处理         去噪 1.2KB → 0.4KB        120ms
+✓ 分段           找到 1+1+3 个区块         80ms
+✓ 包裹信息       9/10 字段                 1.4s
+✓ 国际物流       12/13 字段                1.3s
+⟳ 子订单 1/3     正在解析…                 …
+○ 子订单 2/3
+○ 子订单 3/3
+○ 字段校验
+```
+
+每行可展开看该步抽到的原始 JSON，方便用户判断是不是哪条信息没抓到。
+
+## 准确率提升清单
+
+| 改进 | 效果 |
+|---|---|
+| 文本分段后再抽取 | 噪声消除，schema 变小，最大幅度提升 |
+| Few-shot 真实样本（在 skill 里维护） | 字段命名歧义大幅降低 |
+| 子订单并发 + 每个独立抽取 | 多件商品不再相互"串味" |
+| 失败块自动重试 + 升级到 gemini-2.5-pro | 兜底兜住边缘 case |
+| 后处理金额/日期/汇率正则归一 | 数字类字段稳定 |
+| 时间线把每步结果可视化 | 用户可立刻定位错的字段并手动改 |
+
+## 生成 skill：`.workspace/skills/meruki-parcel-recognizer/`
+
+```
+SKILL.md                       # 何时用、调用方式、预期输入输出
+references/
+  field-glossary.md            # meruki 中文/日文字段 → 内部字段名 对照
+  segment-anchors.md           # 分段锚点关键词清单
+  few-shot-examples.md         # 1-2 条真实粘贴文本 + 标准 JSON
+  postprocess-rules.md         # 金额/日期/汇率/重量正则规则
+prompts/
+  segment.md                   # 分段 prompt
+  extract-parcel.md
+  extract-intl-fee.md
+  extract-item.md
+```
+
+`SKILL.md` 描述里写清楚"meruki 日本代购包裹订单识别"，未来 agent 检索到相关任务会自动加载。
+
+## 需要你提供（关键）
+
+为了让 few-shot 和分段锚点真实有效，需要 1-2 份真实样本：
+- 一段用 GoFullPage 截屏后 OCR 出来的、或直接从 meruki 详情页复制粘贴的**完整原始文本**
+- 对应"应该识别成什么"的几个关键字段值（手填即可）
+
+没有也能先按现在内存里 mem://features/meruki-order-model 的字段定义生成一版骨架，等样本到了再迭代。
+
+## 不动的部分
+
+- 数据库 schema 不变
+- 现有 `recognizeParcelBlock` 保留作为 fallback
+- 表单结构、保存逻辑、列表/详情页不变
+
+---
+
+实施顺序：
+1. 建 skill 目录骨架（先用合成样本占位）
+2. 写 `recognize.functions.ts` 分段+抽取管线
+3. 写 SSE 路由 `/api/public/recognize-parcel`
+4. 前端把识别按钮换成时间线卡片，订阅 SSE
+5. 等你给真实样本后，回填 few-shot + 锚点词，调一轮回归
+
+请回答 3 个事：
+1. **样本**：能不能贴一份真实 meruki 详情页粘贴文本？（最影响准确率）
+2. **进度展示粒度**：上面的时间线 OK，还是希望更简化（一行 progress）？
+3. **模型**：默认主路径用 `gemini-3-flash-preview`，仅失败重试时升级到 `gemini-2.5-pro`，可以吗？
