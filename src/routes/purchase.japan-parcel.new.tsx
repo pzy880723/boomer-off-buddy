@@ -21,7 +21,17 @@ import { PageHeader } from "@/components/page-header";
 import { ScreenshotDropzone } from "@/components/screenshot-dropzone";
 import { PARCEL_STATUS_OPTIONS, formatJpy, formatCny } from "@/lib/japan-parcel.helpers";
 import { createJapanParcel, bulkCreateParcelItems } from "@/lib/japan-parcel.functions";
-import { recognizeParcelBlock } from "@/lib/ai.functions";
+import {
+  segmentParcelText,
+  ocrAndSegment,
+  extractParcelInfo,
+  extractIntlFee,
+  extractSubItem,
+} from "@/lib/recognize.functions";
+import {
+  RecognizeTimeline,
+  type TimelineStep,
+} from "@/components/japan-parcel/recognize-timeline";
 
 export const Route = createFileRoute("/purchase/japan-parcel/new")({
   head: () => ({ meta: [{ title: "新建小包裹 · BOOMER OFF" }] }),
