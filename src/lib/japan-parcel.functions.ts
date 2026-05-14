@@ -191,17 +191,26 @@ export const bulkDeleteJapanParcels = createServerFn({ method: "POST" })
 
 const ItemUpdateSchema = z.object({
   id: z.string().uuid(),
+  sub_order_no: z.string().nullable().optional(),
+  merchant_order_no: z.string().nullable().optional(),
+  source_platform: z.string().nullable().optional(),
+  condition: z.string().nullable().optional(),
+  addon_service: z.string().nullable().optional(),
   item_title: z.string().nullable().optional(),
   item_title_cn: z.string().nullable().optional(),
   item_image_url: z.string().nullable().optional(),
   unit_price_jpy: z.number().nullable().optional(),
+  item_price_jpy: z.number().nullable().optional(),
   quantity: z.number().nullable().optional(),
   item_total_jpy: z.number().nullable().optional(),
   item_total_cny: z.number().nullable().optional(),
+  exchange_rate: z.number().nullable().optional(),
   service_fee_jpy: z.number().nullable().optional(),
   domestic_freight_jpy: z.number().nullable().optional(),
   freight_diff_jpy: z.number().nullable().optional(),
   weight_g: z.number().nullable().optional(),
+  pay_method: z.string().nullable().optional(),
+  pay_at: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
 });
 
