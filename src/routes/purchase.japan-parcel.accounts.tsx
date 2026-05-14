@@ -43,18 +43,26 @@ import {
 
 export const Route = createFileRoute("/purchase/japan-parcel/accounts")({
   head: () => ({ meta: [{ title: "Meruki 账号管理 · BOOMER OFF" }] }),
+  loader: () => listMerukiAccounts(),
+  staleTime: 10_000,
   component: AccountsPage,
 });
 
 function AccountsPage() {
   const qc = useQueryClient();
+  const initial = Route.useLoaderData();
   const fetchAccounts = useServerFn(listMerukiAccounts);
   const create = useServerFn(createMerukiAccount);
   const update = useServerFn(updateMerukiAccount);
   const del = useServerFn(deleteMerukiAccount);
   const fetchRuns = useServerFn(listSyncRuns);
 
-  const accounts = useQuery({ queryKey: ["meruki-accounts"], queryFn: () => fetchAccounts() });
+  const accounts = useQuery({
+    queryKey: ["meruki-accounts"],
+    queryFn: () => fetchAccounts(),
+    initialData: initial,
+    staleTime: 10_000,
+  });
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ username: "", password: "", cookie: "", display_name: "" });
