@@ -126,6 +126,39 @@ function JapanParcelList() {
   const toggle = (arr: string[], v: string, setter: (a: string[]) => void) =>
     setter(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  };
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const toggleAll = () => {
+    setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)));
+  };
+
+  const delMut = useMutation({
+    mutationFn: (id: string) => delOne({ data: { id } }),
+    onSuccess: () => {
+      toast.success("已删除");
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const bulkMut = useMutation({
+    mutationFn: (ids: string[]) => delMany({ data: { ids } }),
+    onSuccess: (r) => {
+      toast.success(`已删除 ${r.count} 条`);
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   return (
     <div>
       <PageHeader
