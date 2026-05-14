@@ -20,12 +20,34 @@ const ParcelSchema = z.object({
   total_jpy: z.number().nullable().optional(),
   total_cny: z.number().nullable().optional(),
   exchange_rate: z.number().nullable().optional(),
-  status: z.string().default("paid"),
+  status: z.string().default("purchased"),
+  status_text: z.string().nullable().optional(),
   purchased_at: z.string().nullable().optional(),
   eta: z.string().nullable().optional(),
   received_at: z.string().nullable().optional(),
   warehouse_location: z.string().nullable().optional(),
   weight_g: z.number().nullable().optional(),
+  total_weight_g: z.number().nullable().optional(),
+  volume_cm3: z.number().nullable().optional(),
+  max_side_cm: z.number().nullable().optional(),
+  storage_days: z.number().nullable().optional(),
+  receiver_name: z.string().nullable().optional(),
+  receiver_phone: z.string().nullable().optional(),
+  receiver_address: z.string().nullable().optional(),
+  intl_total_jpy: z.number().nullable().optional(),
+  intl_total_cny: z.number().nullable().optional(),
+  intl_ship_method: z.string().nullable().optional(),
+  intl_charge_method: z.string().nullable().optional(),
+  intl_keep_packaging_jpy: z.number().nullable().optional(),
+  intl_reinforce_jpy: z.number().nullable().optional(),
+  intl_send_fee_jpy: z.number().nullable().optional(),
+  intl_photo_fee_jpy: z.number().nullable().optional(),
+  intl_merge_fee_jpy: z.number().nullable().optional(),
+  intl_points_used: z.number().nullable().optional(),
+  intl_pay_method: z.string().nullable().optional(),
+  intl_pay_at: z.string().nullable().optional(),
+  intl_merchant_order_no: z.string().nullable().optional(),
+  intl_exchange_rate: z.number().nullable().optional(),
   notes: z.string().nullable().optional(),
   account_id: z.string().uuid().nullable().optional(),
 });
@@ -36,14 +58,17 @@ export const listJapanParcels = createServerFn({ method: "GET" })
       input ?? {},
   )
   .handler(async ({ data }) => {
-    let q = supabaseAdmin.from("japan_parcels").select("*").order("created_at", { ascending: false });
+    let q = supabaseAdmin
+      .from("japan_parcels")
+      .select("*, japan_parcel_items(id, item_title, item_image_url, item_total_jpy, item_total_cny, weight_g)")
+      .order("created_at", { ascending: false });
     if (data.status?.length) q = q.in("status", data.status);
     if (data.source?.length) q = q.in("source", data.source);
     if (data.onlyIncomplete) q = q.lt("completeness", 80);
     if (data.search) {
       const s = `%${data.search}%`;
       q = q.or(
-        `item_title.ilike.${s},source_order_no.ilike.${s},tracking_no.ilike.${s},seller.ilike.${s}`,
+        `item_title.ilike.${s},source_order_no.ilike.${s},tracking_no.ilike.${s},seller.ilike.${s},receiver_name.ilike.${s}`,
       );
     }
     const { data: rows, error } = await q.limit(500);
@@ -60,7 +85,12 @@ export const getJapanParcel = createServerFn({ method: "GET" })
       .eq("id", data.id)
       .single();
     if (error) throw new Error(error.message);
-    return { row };
+    const { data: items } = await supabaseAdmin
+      .from("japan_parcel_items")
+      .select("*")
+      .eq("parent_id", data.id)
+      .order("position", { ascending: true });
+    return { row, items: items ?? [] };
   });
 
 export const createJapanParcel = createServerFn({ method: "POST" })
@@ -112,6 +142,44 @@ export const deleteJapanParcel = createServerFn({ method: "POST" })
   .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
     const { error } = await supabaseAdmin.from("japan_parcels").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+const ItemUpdateSchema = z.object({
+  id: z.string().uuid(),
+  item_title: z.string().nullable().optional(),
+  item_title_cn: z.string().nullable().optional(),
+  item_image_url: z.string().nullable().optional(),
+  unit_price_jpy: z.number().nullable().optional(),
+  quantity: z.number().nullable().optional(),
+  item_total_jpy: z.number().nullable().optional(),
+  item_total_cny: z.number().nullable().optional(),
+  service_fee_jpy: z.number().nullable().optional(),
+  domestic_freight_jpy: z.number().nullable().optional(),
+  freight_diff_jpy: z.number().nullable().optional(),
+  weight_g: z.number().nullable().optional(),
+  notes: z.string().nullable().optional(),
+});
+
+export const updateParcelItem = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => ItemUpdateSchema.parse(input))
+  .handler(async ({ data }) => {
+    const { id, ...rest } = data;
+    const { data: row, error } = await supabaseAdmin
+      .from("japan_parcel_items")
+      .update(rest)
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return { row };
+  });
+
+export const deleteParcelItem = createServerFn({ method: "POST" })
+  .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data }) => {
+    const { error } = await supabaseAdmin.from("japan_parcel_items").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
