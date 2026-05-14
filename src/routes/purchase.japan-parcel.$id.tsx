@@ -12,11 +12,16 @@ import { CompletenessRing } from "@/components/completeness-ring";
 import { ParcelForm, type ParcelFormValue } from "@/components/parcel-form";
 import {
   deleteJapanParcel,
+  deleteParcelItem,
   getJapanParcel,
   updateJapanParcel,
   updateJapanParcelStatus,
+  updateParcelItem,
 } from "@/lib/japan-parcel.functions";
 import { PARCEL_SOURCE_LABEL, PARCEL_STATUS_OPTIONS } from "@/lib/japan-parcel.helpers";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/purchase/japan-parcel/$id")({
   head: () => ({ meta: [{ title: "小包裹详情 · BOOMER OFF" }] }),
