@@ -6,9 +6,6 @@ import { Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ParcelStatusBadge } from "@/components/parcel-status-badge";
-import { CompletenessRing } from "@/components/completeness-ring";
-import { ParcelForm, type ParcelFormValue } from "@/components/parcel-form";
 import {
   deleteJapanParcel,
   deleteParcelItem,
@@ -27,6 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { ParcelFormValue } from "@/components/parcel-form";
+import { ParcelEditSections } from "./parcel-edit-sections";
 
 type ItemRow = {
   id: string;
@@ -43,6 +42,15 @@ type ItemRow = {
   weight_g: number | null;
 };
 
+const EXCLUDED_KEYS = new Set([
+  "raw_payload",
+  "completeness",
+  "created_at",
+  "updated_at",
+  "account_id",
+  "status_timeline",
+]);
+
 export function ParcelEditPanel({
   parcelId,
   onDeleted,
@@ -50,7 +58,7 @@ export function ParcelEditPanel({
 }: {
   parcelId: string;
   onDeleted?: () => void;
-  /** compact = true 时（弹窗内）隐藏左栏卡片，只展示表单/子订单 */
+  /** 弹窗内 vs 详情页：当前两者展示一致，参数保留兼容 */
   compact?: boolean;
 }) {
   const id = parcelId;
@@ -110,24 +118,17 @@ export function ParcelEditPanel({
       const r = q.data.row as Record<string, unknown>;
       const f: ParcelFormValue = {};
       Object.entries(r).forEach(([k, v]) => {
-        if (
-          k !== "raw_payload" &&
-          k !== "completeness" &&
-          k !== "created_at" &&
-          k !== "updated_at" &&
-          k !== "account_id" &&
-          k !== "status_timeline"
-        ) {
-          if (v === null || typeof v === "string" || typeof v === "number") {
-            f[k] = v as string | number | null;
-          }
+        if (EXCLUDED_KEYS.has(k)) return;
+        if (v === null || typeof v === "string" || typeof v === "number") {
+          f[k] = v as string | number | null;
         }
       });
       setForm(f);
     }
   }, [q.data]);
 
-  const items = q.data?.items ?? [];
+  const items = (q.data?.items ?? []) as ItemRow[];
+  const itemsTotalJpy = items.reduce((s, it) => s + (Number(it.item_total_jpy) || 0), 0);
   const timeline =
     (q.data?.row as { status_timeline?: { at?: string | null; text?: string | null }[] } | undefined)
       ?.status_timeline ?? [];
@@ -161,30 +162,77 @@ export function ParcelEditPanel({
     onError: (e) => toast.error((e as Error).message),
   });
 
-  if (q.isLoading) return <div className="p-10 text-center text-sm text-muted-foreground">加载中…</div>;
+  if (q.isLoading)
+    return <div className="p-10 text-center text-sm text-muted-foreground">加载中…</div>;
   const row = q.data?.row;
   if (!row) return <div className="p-10 text-center">未找到</div>;
 
-  const headerActions = (
-    <>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          if (confirm("删除此订单？")) delMut.mutate();
-        }}
-      >
-        <Trash2 className="mr-1.5 h-3.5 w-3.5 text-destructive" /> 删除
-      </Button>
-      <Button
-        size="sm"
-        className="bg-gradient-brand hover:opacity-90"
-        onClick={() => saveMut.mutate()}
-        disabled={saveMut.isPending}
-      >
-        <Save className="mr-1.5 h-3.5 w-3.5" /> {saveMut.isPending ? "保存中…" : "保存"}
-      </Button>
-    </>
+  const itemsSlot = (
+    <div className="space-y-2">
+      {items.length === 0 && (
+        <div className="py-4 text-center text-xs text-muted-foreground">此包裹暂无子订单</div>
+      )}
+      {items.map((it, idx) => (
+        <div key={it.id} className="flex gap-3 rounded-md border p-3">
+          {it.item_image_url ? (
+            <img
+              src={it.item_image_url}
+              alt=""
+              className="h-16 w-16 flex-shrink-0 rounded object-cover"
+            />
+          ) : (
+            <div className="h-16 w-16 flex-shrink-0 rounded bg-muted" />
+          )}
+          <div className="min-w-0 flex-1 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-muted-foreground">
+                #{idx + 1} · {it.sub_order_no || "无单号"}
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono">
+                  {it.item_total_jpy != null
+                    ? `¥${Number(it.item_total_jpy).toLocaleString()}`
+                    : "—"}
+                  {it.item_total_cny != null
+                    ? ` (≈￥${Number(it.item_total_cny).toLocaleString()})`
+                    : ""}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => setEditingItem(it)}
+                >
+                  编辑
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-destructive"
+                  onClick={() => {
+                    if (confirm("删除此子订单？")) itemDelMut.mutate(it.id);
+                  }}
+                >
+                  删除
+                </Button>
+              </div>
+            </div>
+            <div className="mt-1 truncate text-sm font-medium">
+              {it.item_title_cn || it.item_title || "(未命名)"}
+            </div>
+            {it.item_title_cn && it.item_title && (
+              <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                {it.item_title}
+              </div>
+            )}
+            <div className="mt-0.5 text-muted-foreground">
+              单价 {it.unit_price_jpy != null ? `¥${Number(it.unit_price_jpy).toLocaleString()}` : "—"}
+              {it.quantity ? ` × ${it.quantity}` : ""} · 入库 {it.weight_g ?? "—"}g
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 
   return (
@@ -203,129 +251,50 @@ export function ParcelEditPanel({
               {s.label}
             </Button>
           ))}
-          <div className="ml-auto flex items-center gap-2">{headerActions}</div>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (confirm("删除此订单？")) delMut.mutate();
+              }}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5 text-destructive" /> 删除
+            </Button>
+            <Button
+              size="sm"
+              className="bg-gradient-brand hover:opacity-90"
+              onClick={() => saveMut.mutate()}
+              disabled={saveMut.isPending}
+            >
+              <Save className="mr-1.5 h-3.5 w-3.5" /> {saveMut.isPending ? "保存中…" : "保存"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      <div className={compact ? "space-y-4" : "grid gap-4 lg:grid-cols-[280px_1fr]"}>
-        {!compact && (
-          <div className="space-y-4">
-            <Card>
-              <CardContent className="p-4">
-                {row.item_image_url ? (
-                  <img src={row.item_image_url} alt="" className="aspect-square w-full rounded-md object-cover" />
-                ) : (
-                  <div className="aspect-square w-full rounded-md bg-muted" />
-                )}
-                <div className="mt-3 flex items-center justify-between">
-                  <ParcelStatusBadge status={row.status} />
-                  <CompletenessRing value={row.completeness ?? 0} size={42} />
-                </div>
-                <dl className="mt-4 grid grid-cols-2 gap-y-2 text-xs">
-                  <dt className="text-muted-foreground">总价 JPY</dt>
-                  <dd className="text-right font-mono">{row.total_jpy != null ? `¥${Number(row.total_jpy).toLocaleString()}` : "—"}</dd>
-                  <dt className="text-muted-foreground">总价 CNY</dt>
-                  <dd className="text-right font-mono">{row.total_cny != null ? `￥${Number(row.total_cny).toLocaleString()}` : "—"}</dd>
-                  <dt className="text-muted-foreground">物流单号</dt>
-                  <dd className="text-right">{row.tracking_no || "—"}</dd>
-                  <dt className="text-muted-foreground">创建时间</dt>
-                  <dd className="text-right">{new Date(row.created_at).toLocaleDateString()}</dd>
-                </dl>
-              </CardContent>
-            </Card>
+      <ParcelEditSections
+        value={form}
+        onChange={setForm}
+        itemsTotalJpy={itemsTotalJpy}
+        itemsSlot={itemsSlot}
+      />
 
-            {row.raw_payload && (
-              <Card>
-                <CardContent className="p-4">
-                  <h3 className="mb-2 text-xs font-semibold text-muted-foreground">原始数据</h3>
-                  <pre className="max-h-64 overflow-auto rounded bg-muted/50 p-2 text-[10px]">
-                    {JSON.stringify(row.raw_payload, null, 2)}
-                  </pre>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <ParcelForm initial={form} onChange={setForm} />
-
-          {timeline.length > 0 && (
-            <Card>
-              <CardContent className="p-4">
-                <h3 className="mb-3 text-sm font-semibold">状态时间线</h3>
-                <ul className="space-y-1.5 text-xs">
-                  {timeline.map((t, i) => (
-                    <li key={i} className="flex gap-3">
-                      <span className="w-40 font-mono text-muted-foreground">{t.at ?? "—"}</span>
-                      <span>{t.text ?? "—"}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
-
-          {items.length > 0 && (
-            <Card>
-              <CardContent className="p-4">
-                <h3 className="mb-3 text-sm font-semibold">
-                  子订单 <span className="font-normal text-muted-foreground">({items.length})</span>
-                </h3>
-                <div className="space-y-3">
-                  {items.map((it, idx) => (
-                    <div key={it.id} className="flex gap-3 rounded-md border p-3">
-                      {it.item_image_url ? (
-                        <img src={it.item_image_url} alt="" className="h-16 w-16 flex-shrink-0 rounded object-cover" />
-                      ) : (
-                        <div className="h-16 w-16 flex-shrink-0 rounded bg-muted" />
-                      )}
-                      <div className="min-w-0 flex-1 text-xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono text-muted-foreground">#{idx + 1} · {it.sub_order_no || "无单号"}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono">
-                              {it.item_total_jpy != null ? `¥${Number(it.item_total_jpy).toLocaleString()}` : "—"}
-                              {it.item_total_cny != null ? ` (≈￥${Number(it.item_total_cny).toLocaleString()})` : ""}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-xs"
-                              onClick={() => setEditingItem(it as ItemRow)}
-                            >
-                              编辑
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-xs text-destructive"
-                              onClick={() => {
-                                if (confirm("删除此子订单？")) itemDelMut.mutate(it.id);
-                              }}
-                            >
-                              删除
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="mt-1 truncate text-sm font-medium">
-                          {it.item_title_cn || it.item_title || "(未命名)"}
-                        </div>
-                        {it.item_title_cn && it.item_title && (
-                          <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{it.item_title}</div>
-                        )}
-                        <div className="mt-0.5 text-muted-foreground">
-                          {it.source_platform || "—"} · {it.condition || "—"} · 入库 {it.weight_g ?? "—"}g
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
+      {timeline.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <h3 className="mb-3 text-sm font-semibold">状态时间线</h3>
+            <ul className="space-y-1.5 text-xs">
+              {timeline.map((t, i) => (
+                <li key={i} className="flex gap-3">
+                  <span className="w-40 font-mono text-muted-foreground">{t.at ?? "—"}</span>
+                  <span>{t.text ?? "—"}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={!!editingItem} onOpenChange={(o) => !o && setEditingItem(null)}>
         <DialogContent className="max-w-lg">
@@ -338,21 +307,27 @@ export function ParcelEditPanel({
                 <Label className="text-xs">商品标题</Label>
                 <Input
                   value={editingItem.item_title ?? ""}
-                  onChange={(e) => setEditingItem({ ...editingItem, item_title: e.target.value })}
+                  onChange={(e) =>
+                    setEditingItem({ ...editingItem, item_title: e.target.value })
+                  }
                 />
               </div>
               <div className="col-span-2">
                 <Label className="text-xs">中文标题</Label>
                 <Input
                   value={editingItem.item_title_cn ?? ""}
-                  onChange={(e) => setEditingItem({ ...editingItem, item_title_cn: e.target.value })}
+                  onChange={(e) =>
+                    setEditingItem({ ...editingItem, item_title_cn: e.target.value })
+                  }
                 />
               </div>
               <div className="col-span-2">
                 <Label className="text-xs">商品图 URL</Label>
                 <Input
                   value={editingItem.item_image_url ?? ""}
-                  onChange={(e) => setEditingItem({ ...editingItem, item_image_url: e.target.value })}
+                  onChange={(e) =>
+                    setEditingItem({ ...editingItem, item_image_url: e.target.value })
+                  }
                 />
               </div>
               <div>
@@ -360,7 +335,12 @@ export function ParcelEditPanel({
                 <Input
                   type="number"
                   value={editingItem.unit_price_jpy ?? ""}
-                  onChange={(e) => setEditingItem({ ...editingItem, unit_price_jpy: e.target.value === "" ? null : Number(e.target.value) })}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      unit_price_jpy: e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
                 />
               </div>
               <div>
@@ -368,7 +348,12 @@ export function ParcelEditPanel({
                 <Input
                   type="number"
                   value={editingItem.quantity ?? ""}
-                  onChange={(e) => setEditingItem({ ...editingItem, quantity: e.target.value === "" ? null : Number(e.target.value) })}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      quantity: e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
                 />
               </div>
               <div>
@@ -376,7 +361,12 @@ export function ParcelEditPanel({
                 <Input
                   type="number"
                   value={editingItem.item_total_jpy ?? ""}
-                  onChange={(e) => setEditingItem({ ...editingItem, item_total_jpy: e.target.value === "" ? null : Number(e.target.value) })}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      item_total_jpy: e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
                 />
               </div>
               <div>
@@ -384,7 +374,12 @@ export function ParcelEditPanel({
                 <Input
                   type="number"
                   value={editingItem.item_total_cny ?? ""}
-                  onChange={(e) => setEditingItem({ ...editingItem, item_total_cny: e.target.value === "" ? null : Number(e.target.value) })}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      item_total_cny: e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
                 />
               </div>
               <div>
@@ -392,13 +387,20 @@ export function ParcelEditPanel({
                 <Input
                   type="number"
                   value={editingItem.weight_g ?? ""}
-                  onChange={(e) => setEditingItem({ ...editingItem, weight_g: e.target.value === "" ? null : Number(e.target.value) })}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      weight_g: e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
                 />
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setEditingItem(null)}>取消</Button>
+            <Button variant="outline" size="sm" onClick={() => setEditingItem(null)}>
+              取消
+            </Button>
             <Button
               size="sm"
               disabled={itemSaveMut.isPending}
