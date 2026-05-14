@@ -1,149 +1,82 @@
-# 智能识别升级方案
 
-## 问题诊断
+# 用真实样本提升识别准确率
 
-当前一次性把全部文字/截图丢给 `recognizeParcelBlock` 让模型同时输出 parcel + intl_fee + items[]，准确率低的原因：
+非常清楚。你给的这份完整复制文本是黄金样本，正好覆盖了三大区块和"包裹外噪声"（顶部导航/侧栏/底部"您可能还喜欢"商品列表/客服悬浮球文案）。这一份就足够把准确率拉上来。
 
-1. 粘贴文字里大量噪声（导航、广告、推荐位、按钮文字）干扰模型
-2. 没有利用 meruki 页面天然的"区块标题"结构（订单详情 / 国际物流费用明细 / 商品费用 ×N）
-3. 一次输出 schema 太大，items 数组容易丢字段或漏件
-4. 用户看不到中间过程，失败时不知道哪一步出错，也无法修
+## 关键发现（基于你的样本）
 
-## 方案：两步识别管线 + 可视化时间线
+1. **包裹区块**起点严格是 `订单详情` 之后紧跟的 `订单信息`，终点是第一次出现 `子订单：` 之前。中间会出现 `附加保障` / `适用"新箱宝"服务` / `订单状态` 这些**必须丢弃**的子段。
+2. **国际物流费用明细**起点是 `国际物流费用明细`，终点是 `关税` 或 `合计金额` 或 `下载购物明细`。
+3. **每个子订单**的稳定锚点是 `子订单：XXXX`（XXXX = sub_order_no，可直接正则提取），终点是下一个 `子订单：` 或 `国际物流费用明细`。
+4. **必须先做的整体噪声裁剪**：
+   - 砍掉一切 `订单详情` 之前的内容（顶部导航/分类/搜索/账户菜单）
+   - 砍掉 `您可能还喜欢` 之后的所有内容（推荐位 + 页脚 + 客服）
+   - 这一刀下去，输入体积通常少 80%+，模型几乎不会再被串味
 
-### 第一步：分段（Segmenter）
+## 计划
 
-不依赖 AI，本地用正则/关键词把粘贴文本切成结构化区块：
+### 1. 升级本地分段器 `segmentParcelText`
 
-```text
-原始文本
-  ↓ 去噪（去导航/页脚/重复空行）
-  ↓ 按锚点切分
-{
-  parcel_block:    "订单详情" 段（订单号/物流单号/状态/重量体积/收货地址）
-  intl_fee_block:  "国际物流费用明细" 段（含金额/支付/发送方式 …）
-  item_blocks:     ["商品费用 6000日元 …", "商品费用 …", …]   // 每个子订单一段
-}
-```
-
-锚点关键词（可在 skill 里维护）：
-- parcel：`订单信息` / `订单号` / `国际物流单号` / `收货地址`
-- intl_fee：`国际物流费用总计` / `国际物流费用明细`
-- item：`商品费用` / `订单编号` + `商户订单号` 配对出现
-
-截图模式：第一步改为先调一次 vision 模型只做"OCR + 分段"，把原始文字 + 段落标记吐回来。
-
-### 第二步：分块抽取（Extractor）
-
-对每个区块独立调用一次结构化抽取，schema 比现在小得多，准确率高：
-
-- `extractParcel(parcel_block)` → ParcelInfo
-- `extractIntlFee(intl_fee_block)` → IntlFee
-- `extractItem(item_block)` → SubItem  （并发 N 次，每个子订单一次）
-
-每次都用：
-- 较小的 zod schema（更聚焦）
-- 1-2 条 few-shot 示例（prompt 内嵌真实样本）
-- 后处理：金额去逗号/¥/円、日期归一 ISO、汇率正则补抽
-
-### 第三步：校验与修复
-
-- schema 通过 → 直接填表
-- 关键字段缺失（如 item.item_total_jpy 为空）→ 对该块重试一次（可换 gemini-2.5-pro）
-- 全部失败 → 把原文段落和报错回显给用户
-
-### 服务端实现
-
-新增 `src/lib/recognize.functions.ts`：
-
-```ts
-recognizeParcelPipeline({ text?, image_base64? })
-  → AsyncIterable<{ step, status, data?, error? }>   // 流式
-```
-
-用 TanStack server route `/api/public/recognize-parcel`（SSE）流式吐出每一步事件，比改 createServerFn 流式更直接。
-
-事件类型：
-```
-{ step:"preprocess",   status:"running"|"done"  }
-{ step:"segment",      status:"done", data:{ parcel:bool, intl:bool, items:N } }
-{ step:"extract_parcel", status:"done", data:{...} }
-{ step:"extract_intl",   status:"done", data:{...} }
-{ step:"extract_item",   status:"done", index, data:{...} }   // ×N
-{ step:"validate",     status:"done", data:{ filled, missing:[...] } }
-{ step:"complete",     status:"done", data:{ parcel, intl_fee, items[] } }
-```
-
-### 前端 UI：分析时间线
-
-把现在的"识别中…"按钮换成一张展开式时间线卡片：
+按上面发现重写切分逻辑（纯正则，无 AI）：
 
 ```text
-✓ 预处理         去噪 1.2KB → 0.4KB        120ms
-✓ 分段           找到 1+1+3 个区块         80ms
-✓ 包裹信息       9/10 字段                 1.4s
-✓ 国际物流       12/13 字段                1.3s
-⟳ 子订单 1/3     正在解析…                 …
-○ 子订单 2/3
-○ 子订单 3/3
-○ 字段校验
+trim:    [订单详情 …… 您可能还喜欢) 之间的内容
+parcel:  [订单信息 …… 第一个 子订单：) 之间，并剔除 附加保障/订单状态 等子段
+intl:    [国际物流费用明细 …… 关税|合计金额|下载购物明细)
+items:   每个 子订单：(\w+) … 直到下一个 子订单：| 国际物流费用明细
 ```
 
-每行可展开看该步抽到的原始 JSON，方便用户判断是不是哪条信息没抓到。
+子订单内部进一步用锚点 `商品费用` / `订单编号` / `入库重量` / `运费补差` 二次定位。
 
-## 准确率提升清单
+### 2. 把这份样本固化成 skill 资产
 
-| 改进 | 效果 |
-|---|---|
-| 文本分段后再抽取 | 噪声消除，schema 变小，最大幅度提升 |
-| Few-shot 真实样本（在 skill 里维护） | 字段命名歧义大幅降低 |
-| 子订单并发 + 每个独立抽取 | 多件商品不再相互"串味" |
-| 失败块自动重试 + 升级到 gemini-2.5-pro | 兜底兜住边缘 case |
-| 后处理金额/日期/汇率正则归一 | 数字类字段稳定 |
-| 时间线把每步结果可视化 | 用户可立刻定位错的字段并手动改 |
+新增/覆盖：
+- `.workspace/skills/meruki-parcel-recognizer/references/sample-full-page.md` — 你给的整段原文
+- `.workspace/skills/meruki-parcel-recognizer/references/sample-expected.json` — 三大区块期望 JSON（parcel + intl_fee + items[2]）
+- `.workspace/skills/meruki-parcel-recognizer/references/segment-anchors.md` — 上面的锚点规则更新（含丢弃段、起止边界）
+- `.workspace/skills/meruki-parcel-recognizer/prompts/extract-parcel.md`、`extract-intl-fee.md`、`extract-item.md` — 每个 prompt 内嵌 1 条 few-shot（输入片段 → 期望 JSON），来自这份样本
 
-## 生成 skill：`.workspace/skills/meruki-parcel-recognizer/`
+### 3. 提升抽取阶段命中率
 
+在 `recognize.functions.ts` 的三个 extractor：
+- prompt 顶部塞入 few-shot（区块 → JSON）
+- 字段说明用样本里**精确字眼**对齐：`国际物流单号` → `tracking_no`、`入库重量` → `weight_g`、`运费补差` → `freight_diff_jpy`、`强化内部加固` → `intl_reinforce_jpy`、`合单手续费` → `intl_merge_fee_jpy`、`存储天数` → `storage_days`、`最大边长（含包装）` → `max_side_cm`、`体积` → `volume_cm3`
+- 后处理补强：
+  - 金额：去 `日元`/`,`/`¥`/`円`/全角空格
+  - 汇率：正则 `1日元≈([\d.]+)人民币`
+  - 日期：`2024-12-27 22:53` → ISO
+  - 重量：`18500g` / `9510g` → number
+  - 体积：`199950cm³` → number
+  - 收货人：`潘瞻远18657433310\n地址` → 拆 name/phone/address
+
+### 4. UI 时间线增强（小改动）
+
+在每个 step 的 detail 行显示"x/y 字段命中"和**裁剪前 → 裁剪后字符数**，让你一眼看到噪声被砍掉了多少：
+
+```text
+✓ 预处理   12,480 → 1,820 字符 (-85%)   80ms
+✓ 分段     parcel ✓ · intl ✓ · items ×2  30ms
+✓ 包裹     11/11 字段                    1.2s
+✓ 国际     13/13 字段                    1.1s
+✓ 子订单 1 13/13 字段                    1.0s
+✓ 子订单 2 13/13 字段                    1.0s
 ```
-SKILL.md                       # 何时用、调用方式、预期输入输出
-references/
-  field-glossary.md            # meruki 中文/日文字段 → 内部字段名 对照
-  segment-anchors.md           # 分段锚点关键词清单
-  few-shot-examples.md         # 1-2 条真实粘贴文本 + 标准 JSON
-  postprocess-rules.md         # 金额/日期/汇率/重量正则规则
-prompts/
-  segment.md                   # 分段 prompt
-  extract-parcel.md
-  extract-intl-fee.md
-  extract-item.md
-```
 
-`SKILL.md` 描述里写清楚"meruki 日本代购包裹订单识别"，未来 agent 检索到相关任务会自动加载。
+### 5. 回归测试（手工验收）
 
-## 需要你提供（关键）
-
-为了让 few-shot 和分段锚点真实有效，需要 1-2 份真实样本：
-- 一段用 GoFullPage 截屏后 OCR 出来的、或直接从 meruki 详情页复制粘贴的**完整原始文本**
-- 对应"应该识别成什么"的几个关键字段值（手填即可）
-
-没有也能先按现在内存里 mem://features/meruki-order-model 的字段定义生成一版骨架，等样本到了再迭代。
+把你这段文本贴进 `/purchase/japan-parcel/new`，期望：
+- parcel.source_order_no = `KHDZ2DSDEKY9ETG`，tracking_no = `CN094890935JP`
+- intl_fee.intl_total_jpy = 16410，intl_reinforce_jpy = 2500，intl_send_fee_jpy = 700
+- items[0].sub_order_no = `MYAY2KCPVGY7WHY`，item_total_jpy = 7725，weight_g = 9510
+- items[1].sub_order_no = `CYAE5T4WEF6XGCP`，item_total_jpy = 6000，weight_g = 7568
 
 ## 不动的部分
 
-- 数据库 schema 不变
-- 现有 `recognizeParcelBlock` 保留作为 fallback
-- 表单结构、保存逻辑、列表/详情页不变
+- 数据库 schema、表单、保存逻辑、`extension/` 旧抓取代码
+- `recognizeParcelBlock` 仍保留作 fallback
+- 模型策略：默认 `gemini-3-flash-preview`，关键字段缺失自动升级 `gemini-2.5-pro`
 
----
+## 需要你确认 / 补充
 
-实施顺序：
-1. 建 skill 目录骨架（先用合成样本占位）
-2. 写 `recognize.functions.ts` 分段+抽取管线
-3. 写 SSE 路由 `/api/public/recognize-parcel`
-4. 前端把识别按钮换成时间线卡片，订阅 SSE
-5. 等你给真实样本后，回填 few-shot + 锚点词，调一轮回归
-
-请回答 3 个事：
-1. **样本**：能不能贴一份真实 meruki 详情页粘贴文本？（最影响准确率）
-2. **进度展示粒度**：上面的时间线 OK，还是希望更简化（一行 progress）？
-3. **模型**：默认主路径用 `gemini-3-flash-preview`，仅失败重试时升级到 `gemini-2.5-pro`，可以吗？
+1. **再来 1 份样本就更稳**：能不能再贴一份**只有 1 个子订单**的、和一份**带"国际物流未发货/合单待审核"等不同状态**的复制文本？两份就能覆盖 90%+ 真实场景。**没有也能先按这一份做，后面遇到 case 再迭代。**
+2. 时间线展示我打算按上面那种"x/y 字段命中"的紧凑形式，OK 吗？
