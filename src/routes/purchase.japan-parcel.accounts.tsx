@@ -34,7 +34,6 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import {
-  type AccountRow,
   createMerukiAccount,
   deleteMerukiAccount,
   listMerukiAccounts,
@@ -44,14 +43,19 @@ import {
 
 export const Route = createFileRoute("/purchase/japan-parcel/accounts")({
   head: () => ({ meta: [{ title: "Meruki 账号管理 · BOOMER OFF" }] }),
-  loader: () => listMerukiAccounts(),
-  staleTime: 10_000,
+  loader: ({ context }) => {
+    // 非阻塞预热：导航立即完成，后台同时拉数据写入 react-query 缓存
+    void context.queryClient.prefetchQuery({
+      queryKey: ["meruki-accounts"],
+      queryFn: () => listMerukiAccounts(),
+      staleTime: 10_000,
+    });
+  },
   component: AccountsPage,
 });
 
 function AccountsPage() {
   const qc = useQueryClient();
-  const initial = Route.useLoaderData();
   const fetchAccounts = useServerFn(listMerukiAccounts);
   const create = useServerFn(createMerukiAccount);
   const update = useServerFn(updateMerukiAccount);
@@ -61,7 +65,6 @@ function AccountsPage() {
   const accounts = useQuery({
     queryKey: ["meruki-accounts"],
     queryFn: () => fetchAccounts(),
-    initialData: initial,
     staleTime: 10_000,
   });
 
@@ -139,7 +142,7 @@ function AccountsPage() {
       .catch((err) => toast.error((err as Error).message));
   };
 
-  const rows: AccountRow[] = accounts.data?.rows ?? [];
+  const rows = accounts.data?.rows ?? [];
 
   return (
     <div>
