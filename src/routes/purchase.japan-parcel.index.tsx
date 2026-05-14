@@ -173,7 +173,20 @@ function JapanParcelList() {
           .filter((u): u is { id: string; item_title_cn: string } => !!u.item_title_cn);
         if (updates.length === 0) return;
         await fnSaveTitles({ data: { updates } });
-        qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+        // 直接合并到现有缓存，避免再发一次列表请求
+        const map = new Map(updates.map((u) => [u.id, u.item_title_cn]));
+        qc.setQueriesData<ListData>({ queryKey: ["jp-parcels"] }, (data) => {
+          if (!data) return data;
+          return {
+            ...data,
+            rows: data.rows.map((row) => ({
+              ...row,
+              japan_parcel_items: (row.japan_parcel_items ?? []).map((it) =>
+                map.has(it.id) ? { ...it, item_title_cn: map.get(it.id)! } : it,
+              ),
+            })),
+          } as ListData;
+        });
       } catch {
         /* silent */
       }
