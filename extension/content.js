@@ -1,5 +1,5 @@
 // Content script: inject the page-world patcher, then forward captured
-// payloads to the background service worker for upload.
+// payloads to the background service worker.
 (function () {
   try {
     const s = document.createElement("script");
@@ -14,8 +14,18 @@
   window.addEventListener("message", (ev) => {
     const d = ev.data;
     if (!d || d.__boomeroff !== true) return;
+    if (d.type === "meruki-injected") {
+      chrome.runtime.sendMessage(
+        { type: "meruki-injected", url: d.url, isMeruki: !!d.isMeruki },
+        () => void chrome.runtime.lastError,
+      );
+      return;
+    }
     if (d.type === "meruki-captured-tick") {
-      chrome.runtime.sendMessage({ type: "meruki-captured-tick" }, () => void chrome.runtime.lastError);
+      chrome.runtime.sendMessage(
+        { type: "meruki-captured-tick", url: d.url || "" },
+        () => void chrome.runtime.lastError,
+      );
       return;
     }
     if (d.type !== "meruki-capture") return;

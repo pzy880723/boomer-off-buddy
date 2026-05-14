@@ -1,14 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Meruki Ingest for BOOMER OFF",
-  "version": "1.0.0",
-  "description": "自动把 meruki.cn 订单数据同步到 BOOMER OFF 系统。打开 meruki 页面即可静默上报，无需粘贴 Cookie。",
-  "permissions": ["storage"],
-  "host_permissions": [
-    "https://*.meruki.cn/*",
-    "https://*.lovable.app/*",
-    "https://*.lovableproject.com/*"
-  ],
+  "version": "1.1.0",
+  "description": "自动把 Meruki 订单数据同步到 BOOMER OFF 系统。打开 Meruki 任意页面即可静默上报。",
+  "permissions": ["storage", "activeTab", "tabs"],
+  "host_permissions": ["<all_urls>"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": "icon.png"
@@ -18,16 +14,16 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*.meruki.cn/*"],
+      "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_start",
-      "all_frames": false
+      "all_frames": true
     }
   ],
   "web_accessible_resources": [
     {
       "resources": ["inject.js"],
-      "matches": ["https://*.meruki.cn/*"]
+      "matches": ["<all_urls>"]
     }
   ],
   "icons": { "48": "icon.png", "128": "icon.png" }

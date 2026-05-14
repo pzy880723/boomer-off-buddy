@@ -1,69 +1,92 @@
-# 修复插件「已发送 0」问题
+## 现状判断
 
-## 现状
+我查了当前后台数据：
 
-- 数据库里没有任何插件上报记录（`japan_parcels` 0 条，`meruki_sync_runs` 最近的两条是旧的 cookie 同步）
-- 插件 popup 显示「已发送 0」且无错误 → 插件已加载、令牌已配，但 `inject.js` 里的 URL 过滤没匹配到任何 meruki 接口
-- 当前过滤词：`order|parcel|package|inProgress|buy|purchase|warehouse|cart|deliver|tracking`，meruki 实际接口路径很可能不含这些词
+- `meruki_raw_captures` 仍然是 0 条
+- `meruki_sync_runs` 只有 5 月 12 日旧记录
+- 说明插件没有成功把任何 JSON 上报到后端
 
-## 方案
+当前插件只在 `https://*.meruki.cn/*` 页面注入，且只抓 `meruki.cn` 域名下的接口。问题很可能是：Meruki 实际页面或接口域名不是 `*.meruki.cn`，或者接口走了 `meruki.co.jp`、`api.xxx`、`www.xxx`、子 iframe、blob/relative 请求等，导致插件根本没注入或没命中。
 
-### 1. 放宽抓取规则（`extension/inject.js`）
+## 修复方案
 
-- 删除 URL 关键词白名单
-- 改为**抓取 meruki.cn 域下所有 JSON 响应**（按 `Content-Type: application/json` 或返回体首字符 `{` `[` 判断）
-- 设置上限：单条 payload > 500KB 跳过，避免爆量
-- 抓取后由后端 `findOrderArray` 决定是不是订单，不是订单也不报错
+### 1. 放宽插件可运行域名
 
-### 2. 增加诊断字段（`extension/popup.html` + `popup.js` + `background.js`）
+更新 `extension/manifest.json`：
 
-新增三个统计：
-- **抓到 JSON**：`inject.js` 捕获了多少条 JSON
-- **已发送**：成功 POST 到后端的次数
-- **识别为订单**：后端识别成功的次数
-- **最近 5 条上报的 URL**（缩略显示，便于我们一眼看出 meruki 真实接口路径）
+- 增加常见 Meruki 相关域名匹配范围
+- 允许插件在更多 Meruki 页面注入
+- 临时允许捕获页面自身发出的所有 HTTPS JSON 请求，后端仍只接收带正确令牌的上报
 
-让我下次能立刻判断：
-- 抓到 JSON = 0 → 用户根本没访问 meruki 或域名不对
-- 抓到 > 0 / 发送 = 0 → 网络/令牌问题
-- 发送 > 0 / 识别 = 0 → 接口路径找到了但订单识别算法没认出，需调
+目标：先解决「抓到 JSON = 0」的问题，不再被域名猜错卡住。
 
-### 3. 后端宽容化（`src/routes/api/public/meruki-ingest.ts`）
+### 2. 增加插件自检状态
 
-- 即使没识别为订单，也把 payload 落到 `meruki_sync_runs.message` 的截断版本（已经做了）
-- 额外把**未识别但来自疑似订单页**的原始 payload 存到一张轻量表 `meruki_raw_captures (id, account_id, source_url, payload jsonb, captured_at)`，方便我直接 SQL 查看真实结构后改解析逻辑
+更新 `content.js`、`inject.js`、`background.js`、`popup.html`、`popup.js`：
 
-### 4. 重新打包扩展
+- popup 显示「插件已注入当前页面」
+- popup 显示「当前页面 URL」
+- popup 显示「最近抓到的接口 URL」
+- 如果当前页面没有注入，直接提示「当前页面不在插件允许范围内」
+- 增加「重置统计」按钮，避免旧数字误导判断
 
+这样下一次你打开 popup，我能一眼判断：
+
+- 插件没注入：域名/安装问题
+- 已注入但抓到 0：页面没有发 JSON，或请求发生在 iframe/worker
+- 抓到 > 0 但发送 0：令牌/网络/后端地址问题
+- 发送 > 0 但识别 0：后端解析规则需要按真实接口结构调整
+
+### 3. 后端增加诊断接口
+
+在现有 `/api/public/meruki-ingest` 基础上保持兼容，不改令牌机制。
+
+另外新增轻量诊断：
+
+- 插件可发送一次 `ping`
+- 后端返回 `ok: true`
+- popup 显示「后端连通：正常 / 异常」
+
+这样可以排除 baseUrl 写错、发布地址不对、CORS 等问题。
+
+### 4. 重新打包插件
+
+重新生成：
+
+```text
+public/meruki-ingest-extension.zip
 ```
-rm -f public/meruki-ingest-extension.zip
-cd extension && nix run nixpkgs#zip -- -r ../public/meruki-ingest-extension.zip .
-```
 
-## 用户操作
+你需要重新下载、解压并在 Chrome 扩展页点「重新加载」或重新安装。
 
-1. 重新下载插件 zip → 在 chrome://extensions 点扩展卡片右下角「🔄」重新加载（或删除后重装）
-2. 打开 meruki，**进入「我的订单 / 进行中订单 / 包裹列表」任意页面**并刷新一次
-3. 点插件图标，把「抓到 JSON / 已发送 / 识别为订单 / 最近 URL」截图发我
+### 5. 下一步验证流程
 
-我看到 URL 后就能精准调整解析，**不再盲猜**。
+修完后你按这个顺序验证：
+
+1. 重新安装新版插件
+2. 打开 Meruki 页面并刷新一次
+3. 点插件图标
+4. 把 popup 截图发我
+
+我会根据新字段判断下一步：
+
+- 如果看到真实接口 URL，我就按真实 payload 改订单解析
+- 如果仍没有注入，我继续把域名范围或 iframe 注入方式扩大
+- 如果连通失败，我修后端地址/CORS/令牌校验
 
 ## 技术细节
 
-- `inject.js` URL 过滤改成 `() => true`（仅域名判断）
-- 大小限制：`if (txt.length > 500000) return;`
-- popup 新增 chrome.storage 字段：`stats.captured`、`stats.recentUrls: string[]`（上限 5）
-- 新表迁移（如确认要做诊断表）：
+- 主要改动文件：
+  - `extension/manifest.json`
+  - `extension/inject.js`
+  - `extension/content.js`
+  - `extension/background.js`
+  - `extension/popup.html`
+  - `extension/popup.js`
+  - `src/routes/api/public/meruki-ingest.ts`
+  - `public/meruki-ingest-extension.zip`
 
-```sql
-create table public.meruki_raw_captures (
-  id uuid primary key default gen_random_uuid(),
-  account_id uuid references public.meruki_accounts(id) on delete cascade,
-  source_url text not null,
-  payload jsonb not null,
-  recognized boolean not null default false,
-  captured_at timestamptz not null default now()
-);
-alter table public.meruki_raw_captures enable row level security;
-create policy open_all on public.meruki_raw_captures for all using (true) with check (true);
-```
+- 不改现有订单表结构
+- 不改 Meruki 账号表结构
+- 不删除现有 Cookie 同步方案，只增强插件抓取方案
+- 后端仍使用上报令牌校验，避免别人随便写入数据

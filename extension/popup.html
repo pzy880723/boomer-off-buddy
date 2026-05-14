@@ -4,37 +4,62 @@
     <meta charset="utf-8" />
     <title>Meruki Ingest</title>
     <style>
-      body { font: 13px -apple-system, system-ui, sans-serif; margin: 0; padding: 14px; width: 340px; color: #111; }
+      body { font: 13px -apple-system, system-ui, sans-serif; margin: 0; padding: 14px; width: 360px; color: #111; }
       h1 { font-size: 14px; margin: 0 0 10px; }
       label { display: block; font-size: 12px; color: #555; margin: 8px 0 4px; }
       input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
-      button { margin-top: 10px; width: 100%; padding: 8px; background: #111; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
+      button { margin-top: 8px; padding: 7px 10px; background: #111; color: #fff; border: 0; border-radius: 6px; cursor: pointer; font: inherit; }
+      button.secondary { background: #f3f4f6; color: #111; border: 1px solid #d1d5db; }
+      .btn-row { display:flex; gap: 8px; }
+      .btn-row > button { flex: 1; }
       .row { display: flex; justify-content: space-between; font-size: 12px; color: #555; margin-top: 4px; gap: 8px; }
       .err { color: #dc2626; word-break: break-all; text-align: right; }
+      .ok { color: #047857; }
+      .warn { color: #b45309; }
       .muted { color: #888; font-size: 11px; margin-top: 8px; }
-      .urls { margin-top: 8px; max-height: 96px; overflow:auto; background:#fafafa; border:1px solid #eee; border-radius:6px; padding:6px; font-size: 11px; color:#333; }
+      .urls { margin-top: 6px; max-height: 110px; overflow:auto; background:#fafafa; border:1px solid #eee; border-radius:6px; padding:6px; font-size: 11px; color:#333; }
       .urls div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .badge { display:inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+      .badge.ok  { background: #ecfdf5; color: #047857; }
+      .badge.warn{ background: #fffbeb; color: #b45309; }
+      .badge.bad { background: #fef2f2; color: #dc2626; }
+      .section { margin-top: 12px; border-top: 1px solid #eee; padding-top: 10px; }
+      .pageurl { font-size: 11px; color:#374151; word-break: break-all; }
     </style>
   </head>
   <body>
     <h1>Meruki → BOOMER OFF</h1>
-    <label>上报令牌</label>
-    <input id="token" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-    <label>系统地址</label>
-    <input id="base" placeholder="https://project--xxx.lovable.app" />
-    <button id="save">保存</button>
 
-    <div style="margin-top:12px;border-top:1px solid #eee;padding-top:10px;">
-      <div class="row"><span>抓到 JSON</span><span id="cap">0</span></div>
+    <div class="section" style="margin-top:0;border-top:0;padding-top:0;">
+      <div class="row"><span>当前页面注入</span><span id="injState" class="badge warn">检测中…</span></div>
+      <div class="pageurl" id="pageUrl">—</div>
+      <div class="row"><span>后端连通</span><span id="pingState" class="badge warn">未测试</span></div>
+      <div class="btn-row">
+        <button id="ping" class="secondary">测试后端连通</button>
+        <button id="reset" class="secondary">重置统计</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <label>上报令牌</label>
+      <input id="token" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+      <label>系统地址</label>
+      <input id="base" placeholder="https://project--xxx.lovable.app" />
+      <button id="save" style="width:100%;margin-top:10px;">保存</button>
+    </div>
+
+    <div class="section">
+      <div class="row"><span>抓到 JSON / 接口数</span><span id="cap">0</span></div>
       <div class="row"><span>已发送到后端</span><span id="sent">0</span></div>
       <div class="row"><span>识别为订单</span><span id="rec">0</span></div>
-      <div class="row"><span>最后上报</span><span id="last">—</span></div>
+      <div class="row"><span>最后上报时间</span><span id="last">—</span></div>
       <div class="row"><span>本次新增 / 修改</span><span id="ins">—</span></div>
       <div id="errBox" class="row" style="display:none;"><span>错误</span><span id="err" class="err"></span></div>
-      <label style="margin-top:10px;">最近抓到的接口 URL（把这段截图发给客服可极速诊断）</label>
+      <label style="margin-top:10px;">最近接口 URL（截图发我即可定位）</label>
       <div class="urls" id="urls"><em>暂无</em></div>
     </div>
-    <p class="muted">打开 meruki 任意订单/包裹/进行中页面即会自动抓取，无需手动触发。</p>
+
+    <p class="muted">打开 Meruki 任意订单 / 包裹页面，刷新一次即可自动上报。如显示「当前页面未注入」，请确认浏览器里这个标签页是 Meruki，并刷新。</p>
 
     <script src="popup.js"></script>
   </body>
