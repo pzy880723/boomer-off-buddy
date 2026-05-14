@@ -17,7 +17,6 @@ export const PARCEL_STATUS_OPTIONS: { value: ParcelStatus; label: string }[] = [
 
 export const PARCEL_STATUS_LABEL: Record<string, string> = {
   ...Object.fromEntries(PARCEL_STATUS_OPTIONS.map((s) => [s.value, s.label])),
-  // Legacy aliases for rows created before the simplified dictionary.
   paid: "已采购",
   bidding: "竞拍中",
   warehouse_jp: "日本仓已入库",
@@ -43,41 +42,27 @@ export const PARCEL_SOURCE_LABEL: Record<ParcelSource, string> = {
 };
 
 export interface ParcelInput {
-  source?: ParcelSource | string;
   source_order_no?: string | null;
   tracking_no?: string | null;
-  item_title?: string | null;
-  item_title_cn?: string | null;
-  item_image_url?: string | null;
-  seller?: string | null;
-  category?: string | null;
-  price_jpy?: number | null;
-  service_fee_jpy?: number | null;
-  domestic_freight_jpy?: number | null;
-  intl_freight_jpy?: number | null;
-  total_jpy?: number | null;
-  total_cny?: number | null;
-  exchange_rate?: number | null;
-  status?: ParcelStatus | string;
-  purchased_at?: string | null;
-  eta?: string | null;
-  received_at?: string | null;
-  warehouse_location?: string | null;
-  weight_g?: number | null;
-  notes?: string | null;
+  receiver_name?: string | null;
+  receiver_address?: string | null;
+  total_weight_g?: number | null;
+  intl_total_jpy?: number | null;
+  intl_ship_method?: string | null;
+  intl_pay_at?: string | null;
+  // legacy flat fields kept optional for backward compat
+  [key: string]: unknown;
 }
 
 const COMPLETENESS_FIELDS: (keyof ParcelInput)[] = [
   "source_order_no",
   "tracking_no",
-  "item_title",
-  "item_image_url",
-  "seller",
-  "price_jpy",
-  "total_jpy",
-  "purchased_at",
-  "warehouse_location",
-  "weight_g",
+  "receiver_name",
+  "receiver_address",
+  "total_weight_g",
+  "intl_total_jpy",
+  "intl_ship_method",
+  "intl_pay_at",
 ];
 
 export function computeCompleteness(p: ParcelInput): number {
@@ -86,4 +71,14 @@ export function computeCompleteness(p: ParcelInput): number {
     return v !== null && v !== undefined && v !== "";
   }).length;
   return Math.round((filled / COMPLETENESS_FIELDS.length) * 100);
+}
+
+export function formatJpy(v: number | null | undefined): string {
+  if (v == null) return "—";
+  return `¥${Number(v).toLocaleString()}`;
+}
+
+export function formatCny(v: number | null | undefined): string {
+  if (v == null) return "—";
+  return `￥${Number(v).toLocaleString()}`;
 }
