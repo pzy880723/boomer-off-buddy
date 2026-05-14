@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/page-header";
 import { ParcelStatusBadge } from "@/components/parcel-status-badge";
 import { CompletenessRing } from "@/components/completeness-ring";
@@ -43,6 +44,8 @@ import {
 import {
   listJapanParcels,
   updateJapanParcelStatus,
+  deleteJapanParcel,
+  bulkDeleteJapanParcels,
 } from "@/lib/japan-parcel.functions";
 import { useDebounced } from "@/hooks/use-debounced";
 
