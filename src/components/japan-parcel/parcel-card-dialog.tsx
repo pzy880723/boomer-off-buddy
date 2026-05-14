@@ -34,7 +34,18 @@ export interface ParcelCardData {
   source_order_no: string | null;
   tracking_no: string | null;
   status: string;
-  [key: string]: unknown;
+  purchased_at?: string | null;
+  received_at?: string | null;
+  grand_total_jpy?: number | null;
+  grand_total_cny?: number | null;
+  intl_total_jpy?: number | null;
+  intl_total_cny?: number | null;
+  intl_freight_jpy?: number | null;
+  intl_reinforce_jpy?: number | null;
+  intl_merge_fee_jpy?: number | null;
+  intl_send_fee_jpy?: number | null;
+  intl_exchange_rate?: number | null;
+  tariff_jpy?: number | null;
 }
 
 export function ParcelCardDialog({
