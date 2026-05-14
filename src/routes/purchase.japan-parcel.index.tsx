@@ -5,7 +5,6 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Plus,
   Search,
-  Image as ImageIcon,
   Filter,
   Upload,
   ChevronDown,
