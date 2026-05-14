@@ -103,6 +103,23 @@ function ParcelDetail() {
         }
       />
 
+      <Card className="mb-4">
+        <CardContent className="flex flex-wrap items-center gap-2 py-3">
+          <span className="mr-2 text-xs text-muted-foreground">快捷修改状态：</span>
+          {PARCEL_STATUS_OPTIONS.map((s) => (
+            <Button
+              key={s.value}
+              size="sm"
+              variant={row.status === s.value ? "default" : "outline"}
+              onClick={() => statusMut.mutate(s.value)}
+              disabled={statusMut.isPending || row.status === s.value}
+            >
+              {s.label}
+            </Button>
+          ))}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
         <div className="space-y-4">
           <Card>
