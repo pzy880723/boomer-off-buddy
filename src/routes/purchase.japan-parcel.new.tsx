@@ -481,15 +481,20 @@ function NewParcelPage() {
               size="sm"
               className="bg-gradient-brand hover:opacity-90"
               disabled={
-                recogMut.isPending ||
-                (smartTab === "text" ? !smartText.trim() : !smartImage)
+                running || (smartTab === "text" ? !smartText.trim() : !smartImage)
               }
-              onClick={() => recogMut.mutate()}
+              onClick={runPipeline}
             >
               <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              {recogMut.isPending ? "识别中…" : "一键识别并填充"}
+              {running ? "识别中…" : "一键识别并填充"}
             </Button>
           </div>
+
+          {tlSteps.length > 0 && (
+            <div className="mt-3">
+              <RecognizeTimeline steps={tlSteps} />
+            </div>
+          )}
         </CardContent>
       </Card>
 
