@@ -69,6 +69,16 @@ function ParcelDetail() {
     },
   });
 
+  const statusMut = useMutation({
+    mutationFn: (status: string) => setStatus({ data: { id, status } }),
+    onSuccess: () => {
+      toast.success("状态已更新");
+      qc.invalidateQueries({ queryKey: ["jp-parcel", id] });
+      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   if (q.isLoading) return <div className="p-10 text-center text-sm text-muted-foreground">加载中…</div>;
   const row = q.data?.row;
   if (!row) return <div className="p-10 text-center">未找到</div>;
