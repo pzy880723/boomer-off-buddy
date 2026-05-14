@@ -30,16 +30,26 @@ import { ParcelEditSections } from "./parcel-edit-sections";
 type ItemRow = {
   id: string;
   sub_order_no: string | null;
+  merchant_order_no: string | null;
+  source_platform: string | null;
+  condition: string | null;
+  addon_service: string | null;
   item_title: string | null;
   item_title_cn: string | null;
   item_image_url: string | null;
-  source_platform: string | null;
-  condition: string | null;
   unit_price_jpy: number | null;
+  item_price_jpy: number | null;
   quantity: number | null;
   item_total_jpy: number | null;
   item_total_cny: number | null;
+  exchange_rate: number | null;
+  service_fee_jpy: number | null;
+  domestic_freight_jpy: number | null;
+  freight_diff_jpy: number | null;
   weight_g: number | null;
+  pay_method: string | null;
+  pay_at: string | null;
+  notes: string | null;
 };
 
 const EXCLUDED_KEYS = new Set([
@@ -78,14 +88,27 @@ export function ParcelEditPanel({
       updateItem({
         data: {
           id: it.id,
+          sub_order_no: it.sub_order_no,
+          merchant_order_no: it.merchant_order_no,
+          source_platform: it.source_platform,
+          condition: it.condition,
+          addon_service: it.addon_service,
           item_title: it.item_title,
           item_title_cn: it.item_title_cn,
           item_image_url: it.item_image_url,
           unit_price_jpy: it.unit_price_jpy,
+          item_price_jpy: it.item_price_jpy,
           quantity: it.quantity,
           item_total_jpy: it.item_total_jpy,
           item_total_cny: it.item_total_cny,
+          exchange_rate: it.exchange_rate,
+          service_fee_jpy: it.service_fee_jpy,
+          domestic_freight_jpy: it.domestic_freight_jpy,
+          freight_diff_jpy: it.freight_diff_jpy,
           weight_g: it.weight_g,
+          pay_method: it.pay_method,
+          pay_at: it.pay_at,
+          notes: it.notes,
         },
       }),
     onSuccess: () => {
