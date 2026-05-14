@@ -121,6 +121,8 @@ export type Database = {
           domestic_freight_jpy: number | null
           eta: string | null
           exchange_rate: number | null
+          grand_total_cny: number | null
+          grand_total_jpy: number | null
           id: string
           intl_charge_method: string | null
           intl_exchange_rate: number | null
@@ -157,6 +159,8 @@ export type Database = {
           status_text: string | null
           status_timeline: Json | null
           storage_days: number | null
+          tariff_cny: number | null
+          tariff_jpy: number | null
           total_cny: number | null
           total_jpy: number | null
           total_weight_g: number | null
@@ -174,6 +178,8 @@ export type Database = {
           domestic_freight_jpy?: number | null
           eta?: string | null
           exchange_rate?: number | null
+          grand_total_cny?: number | null
+          grand_total_jpy?: number | null
           id?: string
           intl_charge_method?: string | null
           intl_exchange_rate?: number | null
@@ -210,6 +216,8 @@ export type Database = {
           status_text?: string | null
           status_timeline?: Json | null
           storage_days?: number | null
+          tariff_cny?: number | null
+          tariff_jpy?: number | null
           total_cny?: number | null
           total_jpy?: number | null
           total_weight_g?: number | null
@@ -227,6 +235,8 @@ export type Database = {
           domestic_freight_jpy?: number | null
           eta?: string | null
           exchange_rate?: number | null
+          grand_total_cny?: number | null
+          grand_total_jpy?: number | null
           id?: string
           intl_charge_method?: string | null
           intl_exchange_rate?: number | null
@@ -263,6 +273,8 @@ export type Database = {
           status_text?: string | null
           status_timeline?: Json | null
           storage_days?: number | null
+          tariff_cny?: number | null
+          tariff_jpy?: number | null
           total_cny?: number | null
           total_jpy?: number | null
           total_weight_g?: number | null
