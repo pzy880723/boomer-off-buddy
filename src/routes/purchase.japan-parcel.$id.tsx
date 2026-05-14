@@ -302,6 +302,89 @@ function ParcelDetail() {
           )}
         </div>
       </div>
+
+      <Dialog open={!!editingItem} onOpenChange={(o) => !o && setEditingItem(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>编辑子订单</DialogTitle>
+          </DialogHeader>
+          {editingItem && (
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="col-span-2">
+                <Label className="text-xs">商品标题</Label>
+                <Input
+                  value={editingItem.item_title ?? ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, item_title: e.target.value })}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs">中文标题</Label>
+                <Input
+                  value={editingItem.item_title_cn ?? ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, item_title_cn: e.target.value })}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs">商品图 URL</Label>
+                <Input
+                  value={editingItem.item_image_url ?? ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, item_image_url: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">单价 JPY</Label>
+                <Input
+                  type="number"
+                  value={editingItem.unit_price_jpy ?? ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, unit_price_jpy: e.target.value === "" ? null : Number(e.target.value) })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">数量</Label>
+                <Input
+                  type="number"
+                  value={editingItem.quantity ?? ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, quantity: e.target.value === "" ? null : Number(e.target.value) })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">合计 JPY</Label>
+                <Input
+                  type="number"
+                  value={editingItem.item_total_jpy ?? ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, item_total_jpy: e.target.value === "" ? null : Number(e.target.value) })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">合计 CNY</Label>
+                <Input
+                  type="number"
+                  value={editingItem.item_total_cny ?? ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, item_total_cny: e.target.value === "" ? null : Number(e.target.value) })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">入库重量 g</Label>
+                <Input
+                  type="number"
+                  value={editingItem.weight_g ?? ""}
+                  onChange={(e) => setEditingItem({ ...editingItem, weight_g: e.target.value === "" ? null : Number(e.target.value) })}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setEditingItem(null)}>取消</Button>
+            <Button
+              size="sm"
+              disabled={itemSaveMut.isPending}
+              onClick={() => editingItem && itemSaveMut.mutate(editingItem)}
+            >
+              {itemSaveMut.isPending ? "保存中…" : "保存"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
