@@ -1,0 +1,5 @@
+ALTER TABLE public.japan_parcels
+  ADD COLUMN IF NOT EXISTS tariff_jpy NUMERIC,
+  ADD COLUMN IF NOT EXISTS tariff_cny NUMERIC,
+  ADD COLUMN IF NOT EXISTS grand_total_jpy NUMERIC,
+  ADD COLUMN IF NOT EXISTS grand_total_cny NUMERIC;

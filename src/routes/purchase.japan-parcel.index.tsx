@@ -5,7 +5,6 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Plus,
   Search,
-  Image as ImageIcon,
   Filter,
   Upload,
   ChevronDown,
@@ -172,16 +171,10 @@ function JapanParcelList() {
                 截图批量导入
               </Link>
             </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/purchase/japan-parcel/new" search={{ tab: "ai" }}>
-                <ImageIcon className="mr-1.5 h-3.5 w-3.5" />
-                单条 AI 识图
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
+            <Button asChild size="sm" className="bg-gradient-brand hover:opacity-90">
               <Link to="/purchase/japan-parcel/new">
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
-                手动新建
+                新建包裹
               </Link>
             </Button>
           </>
