@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -7,9 +7,10 @@ import {
   Search,
   Filter,
   Upload,
-  ChevronDown,
   Trash2,
   Pencil,
+  CheckCircle2,
+  Package,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -29,24 +30,33 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { ParcelStatusBadge } from "@/components/parcel-status-badge";
-import { CompletenessRing } from "@/components/completeness-ring";
 import { EmptyState } from "@/components/empty-state";
 import {
   PARCEL_SOURCE_LABEL,
-  PARCEL_STATUS_OPTIONS,
+  simplifyStatus,
+  SIMPLE_STATUS_LABEL,
+  getDisplayTitle,
+  type SimpleStatus,
 } from "@/lib/japan-parcel.helpers";
 import {
   listJapanParcels,
   updateJapanParcelStatus,
+  updateJapanParcel,
   deleteJapanParcel,
   bulkDeleteJapanParcels,
+  bulkSetItemTitlesCn,
 } from "@/lib/japan-parcel.functions";
+import { translateTitles } from "@/lib/translate.functions";
 import { useDebounced } from "@/hooks/use-debounced";
+import {
+  ParcelCardDialog,
+  type ParcelCardData,
+  type ParcelCardItem,
+} from "@/components/japan-parcel/parcel-card-dialog";
+import { ItemsHoverPreview } from "@/components/japan-parcel/items-hover-preview";
 
 export const Route = createFileRoute("/purchase/japan-parcel/")({
   head: () => ({
@@ -58,21 +68,46 @@ export const Route = createFileRoute("/purchase/japan-parcel/")({
   component: JapanParcelList,
 });
 
+type ItemRow = {
+  id: string;
+  item_title: string | null;
+  item_title_cn: string | null;
+  item_image_url: string | null;
+  item_total_jpy: number | null;
+  item_total_cny: number | null;
+  weight_g: number | null;
+  unit_price_jpy?: number | null;
+  quantity?: number | null;
+  sub_order_no?: string | null;
+};
+
+type ParcelRow = ParcelCardData & {
+  source: string;
+  item_title: string | null;
+  item_title_cn: string | null;
+  item_image_url: string | null;
+  total_jpy: number | null;
+  japan_parcel_items?: ItemRow[];
+};
+
 function JapanParcelList() {
   const qc = useQueryClient();
   const fetchList = useServerFn(listJapanParcels);
   const updateStatus = useServerFn(updateJapanParcelStatus);
+  const updateParcel = useServerFn(updateJapanParcel);
   const delOne = useServerFn(deleteJapanParcel);
   const delMany = useServerFn(bulkDeleteJapanParcels);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const fnTranslate = useServerFn(translateTitles);
+  const fnSaveTitles = useServerFn(bulkSetItemTitlesCn);
 
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [statuses, setStatuses] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<SimpleStatus[]>([]);
   const [sources, setSources] = useState<string[]>([]);
-  const [onlyIncomplete, setOnlyIncomplete] = useState(false);
+  const [openCardId, setOpenCardId] = useState<string | null>(null);
   const debouncedSearch = useDebounced(search, 300);
 
-  const queryKey = ["jp-parcels", { search: debouncedSearch, statuses, sources, onlyIncomplete }] as const;
+  const queryKey = ["jp-parcels", { search: debouncedSearch, sources }] as const;
 
   const list = useQuery({
     queryKey,
@@ -80,9 +115,7 @@ function JapanParcelList() {
       fetchList({
         data: {
           search: debouncedSearch,
-          status: statuses.length ? statuses : undefined,
           source: sources.length ? sources : undefined,
-          onlyIncomplete,
         },
       }),
     placeholderData: (prev) => prev,
@@ -91,9 +124,59 @@ function JapanParcelList() {
 
   type ListData = Awaited<ReturnType<typeof fetchList>>;
 
+  const allRows = (list.data?.rows ?? []) as ParcelRow[];
+  // 客户端按简化状态筛选
+  const rows = useMemo(
+    () =>
+      statusFilter.length
+        ? allRows.filter((r) => statusFilter.includes(simplifyStatus(r.status)))
+        : allRows,
+    [allRows, statusFilter],
+  );
+
+  // ===== 懒翻译：列表加载后，自动给前 20 条「第一个子订单缺中文标题」补翻 =====
+  const translatedOnce = useRef(false);
+  useEffect(() => {
+    if (translatedOnce.current || allRows.length === 0) return;
+    translatedOnce.current = true;
+    const need: { id: string; jp: string }[] = [];
+    for (const r of allRows) {
+      const items = r.japan_parcel_items ?? [];
+      for (const it of items) {
+        if (!it.item_title_cn && it.item_title) {
+          need.push({ id: it.id, jp: it.item_title });
+          if (need.length >= 20) break;
+        }
+      }
+      if (need.length >= 20) break;
+    }
+    if (need.length === 0) return;
+    (async () => {
+      try {
+        const r = await fnTranslate({ data: { titles: need.map((n) => n.jp) } });
+        if (!r.ok) return;
+        const updates = need
+          .map((n, i) => ({ id: n.id, item_title_cn: r.translations[i] }))
+          .filter((u): u is { id: string; item_title_cn: string } => !!u.item_title_cn);
+        if (updates.length === 0) return;
+        await fnSaveTitles({ data: { updates } });
+        qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+      } catch {
+        /* silent */
+      }
+    })();
+  }, [allRows, fnTranslate, fnSaveTitles, qc]);
+
   const statusMut = useMutation({
-    mutationFn: (v: { id: string; status: string }) =>
-      updateStatus({ data: v }),
+    mutationFn: async (v: { id: string; status: SimpleStatus }) => {
+      // 已签收时附带写入 received_at
+      if (v.status === "delivered") {
+        return updateParcel({
+          data: { id: v.id, status: "delivered", received_at: new Date().toISOString() } as never,
+        });
+      }
+      return updateStatus({ data: { id: v.id, status: v.status } });
+    },
     onMutate: async (v) => {
       await qc.cancelQueries({ queryKey: ["jp-parcels"] });
       const snapshots = qc.getQueriesData<ListData>({ queryKey: ["jp-parcels"] });
@@ -101,9 +184,7 @@ function JapanParcelList() {
         if (!data) return;
         qc.setQueryData<ListData>(key, {
           ...data,
-          rows: data.rows.map((r) =>
-            r.id === v.id ? { ...r, status: v.status } : r
-          ),
+          rows: data.rows.map((r) => (r.id === v.id ? { ...r, status: v.status } : r)),
         });
       });
       return { snapshots };
@@ -112,18 +193,16 @@ function JapanParcelList() {
       ctx?.snapshots.forEach(([key, data]) => qc.setQueryData(key, data));
       toast.error((e as Error).message);
     },
-    onSuccess: () => {
-      toast.success("状态已更新");
+    onSuccess: (_d, v) => {
+      toast.success(v.status === "delivered" ? "已标记为已签收" : "已恢复为已采购");
     },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
-    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["jp-parcels"] }),
   });
 
-  const rows = list.data?.rows ?? [];
-
-  const toggle = (arr: string[], v: string, setter: (a: string[]) => void) =>
-    setter(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+  const toggleStatusFilter = (s: SimpleStatus) =>
+    setStatusFilter((arr) => (arr.includes(s) ? arr.filter((x) => x !== s) : [...arr, s]));
+  const toggleSource = (v: string) =>
+    setSources((arr) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]));
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -134,9 +213,7 @@ function JapanParcelList() {
     });
   };
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
-  const toggleAll = () => {
-    setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)));
-  };
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)));
 
   const delMut = useMutation({
     mutationFn: (id: string) => delOne({ data: { id } }),
@@ -157,6 +234,8 @@ function JapanParcelList() {
     },
     onError: (e) => toast.error((e as Error).message),
   });
+
+  const openParcel = allRows.find((r) => r.id === openCardId) ?? null;
 
   return (
     <div>
@@ -188,7 +267,7 @@ function JapanParcelList() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索订单号 / 标题 / 卖家 / 物流单号"
+              placeholder="搜索订单号 / 标题 / 物流单号"
               className="h-9 pl-8"
             />
           </div>
@@ -197,25 +276,20 @@ function JapanParcelList() {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
                 <Filter className="mr-1.5 h-3.5 w-3.5" />
-                状态 {statuses.length ? `(${statuses.length})` : ""}
+                状态 {statusFilter.length ? `(${statusFilter.length})` : ""}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              {PARCEL_STATUS_OPTIONS.map((s) => (
+              {(["purchased", "delivered"] as SimpleStatus[]).map((s) => (
                 <DropdownMenuItem
-                  key={s.value}
+                  key={s}
                   onSelect={(e) => {
                     e.preventDefault();
-                    toggle(statuses, s.value, setStatuses);
+                    toggleStatusFilter(s);
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    readOnly
-                    checked={statuses.includes(s.value)}
-                    className="mr-2"
-                  />
-                  {s.label}
+                  <input type="checkbox" readOnly checked={statusFilter.includes(s)} className="mr-2" />
+                  {SIMPLE_STATUS_LABEL[s]}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -233,31 +307,15 @@ function JapanParcelList() {
                   key={v}
                   onSelect={(e) => {
                     e.preventDefault();
-                    toggle(sources, v, setSources);
+                    toggleSource(v);
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    readOnly
-                    checked={sources.includes(v)}
-                    className="mr-2"
-                  />
+                  <input type="checkbox" readOnly checked={sources.includes(v)} className="mr-2" />
                   {label}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-
-          <div className="ml-auto flex items-center gap-2">
-            <Switch
-              id="incomplete"
-              checked={onlyIncomplete}
-              onCheckedChange={setOnlyIncomplete}
-            />
-            <Label htmlFor="incomplete" className="text-xs">
-              仅看待补全
-            </Label>
-          </div>
         </CardContent>
       </Card>
 
@@ -298,140 +356,136 @@ function JapanParcelList() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[36px]">
-                    <Checkbox
-                      checked={allSelected}
-                      onCheckedChange={toggleAll}
-                      aria-label="全选"
-                    />
+                    <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="全选" />
                   </TableHead>
                   <TableHead className="w-[60px]">图</TableHead>
-                  <TableHead>订单号 / 标题</TableHead>
-                  <TableHead>卖家</TableHead>
+                  <TableHead>订单 / 标题</TableHead>
                   <TableHead className="text-center">子单</TableHead>
                   <TableHead>状态</TableHead>
                   <TableHead className="text-right">合计 ￥</TableHead>
                   <TableHead>采购时间</TableHead>
-                  <TableHead className="text-center">完整度</TableHead>
-                  <TableHead className="w-[100px] text-right">操作</TableHead>
+                  <TableHead className="w-[110px] text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((r) => {
-                  const subs = (r as { japan_parcel_items?: { item_total_cny: number | null; item_title: string | null; item_image_url: string | null }[] }).japan_parcel_items ?? [];
-                  const subCount = subs.length;
-                  const subSumCny = subs.reduce((s, it) => s + (Number(it.item_total_cny) || 0), 0);
-                  const totalCny = (Number(r.intl_total_cny) || 0) + subSumCny;
-                  const firstTitle = subs[0]?.item_title;
-                  const firstImage = subs[0]?.item_image_url;
+                  const items = (r.japan_parcel_items ?? []) as ItemRow[];
+                  const subCount = items.length;
+                  const subSumJpy = items.reduce((s, it) => s + (Number(it.item_total_jpy) || 0), 0);
+                  const totalJpy =
+                    Number(r.grand_total_jpy) ||
+                    subSumJpy + (Number(r.intl_total_jpy) || 0) + (Number(r.tariff_jpy) || 0) ||
+                    Number(r.total_jpy) ||
+                    0;
+                  const title = getDisplayTitle(r, items);
+                  const simple = simplifyStatus(r.status);
                   return (
-                  <TableRow key={r.id} data-state={selected.has(r.id) ? "selected" : undefined}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selected.has(r.id)}
-                        onCheckedChange={() => toggleSelect(r.id)}
-                        aria-label="选中此行"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Link to="/purchase/japan-parcel/$id" params={{ id: r.id }}>
-                        {(r.item_image_url || firstImage) ? (
-                          <img
-                            src={(r.item_image_url || firstImage)!}
-                            alt=""
-                            className="h-10 w-10 rounded object-cover"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded bg-muted" />
-                        )}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Link to="/purchase/japan-parcel/$id" params={{ id: r.id }}>
-                        <div className="font-medium text-sm">
-                          {r.item_title || r.item_title_cn || firstTitle || r.source_order_no || "(未命名)"}
-                        </div>
+                    <TableRow
+                      key={r.id}
+                      data-state={selected.has(r.id) ? "selected" : undefined}
+                      className="cursor-pointer"
+                      onClick={() => setOpenCardId(r.id)}
+                    >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selected.has(r.id)}
+                          onCheckedChange={() => toggleSelect(r.id)}
+                          aria-label="选中此行"
+                        />
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <ItemsHoverPreview
+                          items={items.map((it) => ({
+                            id: it.id,
+                            item_title: it.item_title,
+                            item_title_cn: it.item_title_cn,
+                            item_image_url: it.item_image_url,
+                          }))}
+                          onClick={() => setOpenCardId(r.id)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="line-clamp-1 text-sm font-medium">{title}</div>
                         <div className="mt-0.5 text-xs text-muted-foreground">
                           {r.source_order_no || "—"} ·{" "}
-                          {PARCEL_SOURCE_LABEL[
-                            r.source as keyof typeof PARCEL_SOURCE_LABEL
-                          ] ?? r.source}
+                          {PARCEL_SOURCE_LABEL[r.source as keyof typeof PARCEL_SOURCE_LABEL] ?? r.source}
                         </div>
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-sm">{r.seller || r.receiver_name || "—"}</TableCell>
-                    <TableCell className="text-center text-sm">
-                      {subCount > 0 ? (
-                        <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium">
-                          {subCount}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            className="inline-flex items-center gap-1 rounded hover:opacity-80"
-                            disabled={statusMut.isPending}
-                          >
-                            <ParcelStatusBadge status={r.status} />
-                            <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          {PARCEL_STATUS_OPTIONS.map((s) => (
-                            <DropdownMenuItem
-                              key={s.value}
-                              onSelect={() =>
-                                statusMut.mutate({ id: r.id, status: s.value })
-                              }
+                      </TableCell>
+                      <TableCell className="text-center text-sm">
+                        {subCount > 0 ? (
+                          <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium">
+                            {subCount}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        {simple === "delivered" ? (
+                          <Badge className="gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> 已签收
+                          </Badge>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <Badge variant="secondary" className="gap-1">
+                              <Package className="h-3 w-3" /> 已采购
+                            </Badge>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 px-2 text-[11px]"
+                              disabled={statusMut.isPending}
+                              onClick={() => statusMut.mutate({ id: r.id, status: "delivered" })}
                             >
-                              {s.label}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm">
-                      {totalCny > 0
-                        ? `￥${totalCny.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-                        : r.total_jpy != null
-                        ? `¥${Number(r.total_jpy).toLocaleString()}`
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {r.purchased_at
-                        ? new Date(r.purchased_at).toLocaleDateString()
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex justify-center">
-                        <CompletenessRing value={r.completeness ?? 0} />
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button asChild variant="ghost" size="icon" className="h-7 w-7">
-                          <Link to="/purchase/japan-parcel/$id" params={{ id: r.id }} aria-label="编辑">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Link>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          disabled={delMut.isPending}
-                          onClick={() => {
-                            if (confirm("确认删除此订单？")) delMut.mutate(r.id);
-                          }}
-                          aria-label="删除"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                              确认签收
+                            </Button>
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {totalJpy > 0 ? `¥${totalJpy.toLocaleString()}` : "—"}
+                        {r.grand_total_cny ? (
+                          <div className="text-[10px] text-muted-foreground">
+                            ≈￥{Number(r.grand_total_cny).toLocaleString()}
+                          </div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {r.purchased_at ? new Date(r.purchased_at).toLocaleDateString() : "—"}
+                      </TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-end gap-1">
+                          {simple === "delivered" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-[11px]"
+                              disabled={statusMut.isPending}
+                              onClick={() => statusMut.mutate({ id: r.id, status: "purchased" })}
+                            >
+                              撤销签收
+                            </Button>
+                          )}
+                          <Button asChild variant="ghost" size="icon" className="h-7 w-7">
+                            <Link to="/purchase/japan-parcel/$id" params={{ id: r.id }} aria-label="编辑">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Link>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            disabled={delMut.isPending}
+                            onClick={() => {
+                              if (confirm("确认删除此订单？")) delMut.mutate(r.id);
+                            }}
+                            aria-label="删除"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
               </TableBody>
@@ -439,6 +493,13 @@ function JapanParcelList() {
           )}
         </CardContent>
       </Card>
+
+      <ParcelCardDialog
+        open={!!openCardId}
+        onOpenChange={(o) => !o && setOpenCardId(null)}
+        parcel={openParcel}
+        items={(openParcel?.japan_parcel_items ?? []) as ParcelCardItem[]}
+      />
     </div>
   );
 }
