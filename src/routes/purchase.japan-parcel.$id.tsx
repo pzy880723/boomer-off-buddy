@@ -30,6 +30,7 @@ function ParcelDetail() {
   const get = useServerFn(getJapanParcel);
   const update = useServerFn(updateJapanParcel);
   const del = useServerFn(deleteJapanParcel);
+  const setStatus = useServerFn(updateJapanParcelStatus);
 
   const q = useQuery({
     queryKey: ["jp-parcel", id],
