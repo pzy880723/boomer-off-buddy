@@ -14,6 +14,104 @@ export type Database = {
   }
   public: {
     Tables: {
+      japan_parcel_items: {
+        Row: {
+          addon_service: string | null
+          condition: string | null
+          created_at: string
+          domestic_freight_jpy: number | null
+          exchange_rate: number | null
+          freight_diff_jpy: number | null
+          id: string
+          item_image_url: string | null
+          item_price_jpy: number | null
+          item_title: string | null
+          item_title_cn: string | null
+          item_total_cny: number | null
+          item_total_jpy: number | null
+          merchant_order_no: string | null
+          notes: string | null
+          parent_id: string
+          pay_at: string | null
+          pay_method: string | null
+          position: number
+          quantity: number | null
+          raw_payload: Json | null
+          service_fee_jpy: number | null
+          source_platform: string | null
+          sub_order_no: string | null
+          unit_price_jpy: number | null
+          updated_at: string
+          weight_g: number | null
+        }
+        Insert: {
+          addon_service?: string | null
+          condition?: string | null
+          created_at?: string
+          domestic_freight_jpy?: number | null
+          exchange_rate?: number | null
+          freight_diff_jpy?: number | null
+          id?: string
+          item_image_url?: string | null
+          item_price_jpy?: number | null
+          item_title?: string | null
+          item_title_cn?: string | null
+          item_total_cny?: number | null
+          item_total_jpy?: number | null
+          merchant_order_no?: string | null
+          notes?: string | null
+          parent_id: string
+          pay_at?: string | null
+          pay_method?: string | null
+          position?: number
+          quantity?: number | null
+          raw_payload?: Json | null
+          service_fee_jpy?: number | null
+          source_platform?: string | null
+          sub_order_no?: string | null
+          unit_price_jpy?: number | null
+          updated_at?: string
+          weight_g?: number | null
+        }
+        Update: {
+          addon_service?: string | null
+          condition?: string | null
+          created_at?: string
+          domestic_freight_jpy?: number | null
+          exchange_rate?: number | null
+          freight_diff_jpy?: number | null
+          id?: string
+          item_image_url?: string | null
+          item_price_jpy?: number | null
+          item_title?: string | null
+          item_title_cn?: string | null
+          item_total_cny?: number | null
+          item_total_jpy?: number | null
+          merchant_order_no?: string | null
+          notes?: string | null
+          parent_id?: string
+          pay_at?: string | null
+          pay_method?: string | null
+          position?: number
+          quantity?: number | null
+          raw_payload?: Json | null
+          service_fee_jpy?: number | null
+          source_platform?: string | null
+          sub_order_no?: string | null
+          unit_price_jpy?: number | null
+          updated_at?: string
+          weight_g?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "japan_parcel_items_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "japan_parcels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       japan_parcels: {
         Row: {
           account_id: string | null
@@ -24,24 +122,47 @@ export type Database = {
           eta: string | null
           exchange_rate: number | null
           id: string
+          intl_charge_method: string | null
+          intl_exchange_rate: number | null
           intl_freight_jpy: number | null
+          intl_keep_packaging_jpy: number | null
+          intl_merchant_order_no: string | null
+          intl_merge_fee_jpy: number | null
+          intl_pay_at: string | null
+          intl_pay_method: string | null
+          intl_photo_fee_jpy: number | null
+          intl_points_used: number | null
+          intl_reinforce_jpy: number | null
+          intl_send_fee_jpy: number | null
+          intl_ship_method: string | null
+          intl_total_cny: number | null
+          intl_total_jpy: number | null
           item_image_url: string | null
           item_title: string | null
           item_title_cn: string | null
+          max_side_cm: number | null
           notes: string | null
           price_jpy: number | null
           purchased_at: string | null
           raw_payload: Json | null
           received_at: string | null
+          receiver_address: string | null
+          receiver_name: string | null
+          receiver_phone: string | null
           seller: string | null
           service_fee_jpy: number | null
           source: string
           source_order_no: string | null
           status: string
+          status_text: string | null
+          status_timeline: Json | null
+          storage_days: number | null
           total_cny: number | null
           total_jpy: number | null
+          total_weight_g: number | null
           tracking_no: string | null
           updated_at: string
+          volume_cm3: number | null
           warehouse_location: string | null
           weight_g: number | null
         }
@@ -54,24 +175,47 @@ export type Database = {
           eta?: string | null
           exchange_rate?: number | null
           id?: string
+          intl_charge_method?: string | null
+          intl_exchange_rate?: number | null
           intl_freight_jpy?: number | null
+          intl_keep_packaging_jpy?: number | null
+          intl_merchant_order_no?: string | null
+          intl_merge_fee_jpy?: number | null
+          intl_pay_at?: string | null
+          intl_pay_method?: string | null
+          intl_photo_fee_jpy?: number | null
+          intl_points_used?: number | null
+          intl_reinforce_jpy?: number | null
+          intl_send_fee_jpy?: number | null
+          intl_ship_method?: string | null
+          intl_total_cny?: number | null
+          intl_total_jpy?: number | null
           item_image_url?: string | null
           item_title?: string | null
           item_title_cn?: string | null
+          max_side_cm?: number | null
           notes?: string | null
           price_jpy?: number | null
           purchased_at?: string | null
           raw_payload?: Json | null
           received_at?: string | null
+          receiver_address?: string | null
+          receiver_name?: string | null
+          receiver_phone?: string | null
           seller?: string | null
           service_fee_jpy?: number | null
           source?: string
           source_order_no?: string | null
           status?: string
+          status_text?: string | null
+          status_timeline?: Json | null
+          storage_days?: number | null
           total_cny?: number | null
           total_jpy?: number | null
+          total_weight_g?: number | null
           tracking_no?: string | null
           updated_at?: string
+          volume_cm3?: number | null
           warehouse_location?: string | null
           weight_g?: number | null
         }
@@ -84,24 +228,47 @@ export type Database = {
           eta?: string | null
           exchange_rate?: number | null
           id?: string
+          intl_charge_method?: string | null
+          intl_exchange_rate?: number | null
           intl_freight_jpy?: number | null
+          intl_keep_packaging_jpy?: number | null
+          intl_merchant_order_no?: string | null
+          intl_merge_fee_jpy?: number | null
+          intl_pay_at?: string | null
+          intl_pay_method?: string | null
+          intl_photo_fee_jpy?: number | null
+          intl_points_used?: number | null
+          intl_reinforce_jpy?: number | null
+          intl_send_fee_jpy?: number | null
+          intl_ship_method?: string | null
+          intl_total_cny?: number | null
+          intl_total_jpy?: number | null
           item_image_url?: string | null
           item_title?: string | null
           item_title_cn?: string | null
+          max_side_cm?: number | null
           notes?: string | null
           price_jpy?: number | null
           purchased_at?: string | null
           raw_payload?: Json | null
           received_at?: string | null
+          receiver_address?: string | null
+          receiver_name?: string | null
+          receiver_phone?: string | null
           seller?: string | null
           service_fee_jpy?: number | null
           source?: string
           source_order_no?: string | null
           status?: string
+          status_text?: string | null
+          status_timeline?: Json | null
+          storage_days?: number | null
           total_cny?: number | null
           total_jpy?: number | null
+          total_weight_g?: number | null
           tracking_no?: string | null
           updated_at?: string
+          volume_cm3?: number | null
           warehouse_location?: string | null
           weight_g?: number | null
         }
