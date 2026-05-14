@@ -18,11 +18,22 @@ async function getActiveTab() {
   }
 }
 
+const DEFAULT_BASE =
+  "https://project--2158bffa-7f82-4bc6-9df9-c59319d262f7-dev.lovable.app";
+
 async function load() {
   const cfg = await chrome.storage.local.get(["baseUrl", "ingestToken", "stats"]);
+  // 一次性迁移：旧的未发布生产域名 → 稳定预览 -dev 域名
+  let baseUrl = cfg.baseUrl || DEFAULT_BASE;
+  if (
+    /project--2158bffa-7f82-4bc6-9df9-c59319d262f7\.lovable\.app/.test(baseUrl) &&
+    !/-dev\.lovable\.app/.test(baseUrl)
+  ) {
+    baseUrl = DEFAULT_BASE;
+    await chrome.storage.local.set({ baseUrl });
+  }
   $("token").value = cfg.ingestToken || "";
-  $("base").value =
-    cfg.baseUrl || "https://project--2158bffa-7f82-4bc6-9df9-c59319d262f7.lovable.app";
+  $("base").value = baseUrl;
   const s = cfg.stats || {};
   $("cap").textContent = s.captured || 0;
   $("sent").textContent = s.sent || 0;
