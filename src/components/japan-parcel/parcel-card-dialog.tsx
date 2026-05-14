@@ -18,15 +18,27 @@ import type { ParcelFormValue } from "@/components/parcel-form";
 
 export interface ParcelCardItem {
   id: string;
+  sub_order_no?: string | null;
+  merchant_order_no?: string | null;
+  source_platform?: string | null;
+  condition?: string | null;
+  addon_service?: string | null;
   item_title: string | null;
   item_title_cn: string | null;
   item_image_url: string | null;
   item_total_jpy: number | null;
   item_total_cny: number | null;
   unit_price_jpy?: number | null;
+  item_price_jpy?: number | null;
   quantity?: number | null;
   weight_g?: number | null;
-  sub_order_no?: string | null;
+  exchange_rate?: number | null;
+  service_fee_jpy?: number | null;
+  domestic_freight_jpy?: number | null;
+  freight_diff_jpy?: number | null;
+  pay_method?: string | null;
+  pay_at?: string | null;
+  notes?: string | null;
 }
 
 export interface ParcelCardData {
