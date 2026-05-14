@@ -42,6 +42,7 @@ import {
   listJapanParcels,
   updateJapanParcelStatus,
 } from "@/lib/japan-parcel.functions";
+import { useDebounced } from "@/hooks/use-debounced";
 
 export const Route = createFileRoute("/purchase/japan-parcel/")({
   head: () => ({
@@ -62,28 +63,54 @@ function JapanParcelList() {
   const [statuses, setStatuses] = useState<string[]>([]);
   const [sources, setSources] = useState<string[]>([]);
   const [onlyIncomplete, setOnlyIncomplete] = useState(false);
+  const debouncedSearch = useDebounced(search, 300);
+
+  const queryKey = ["jp-parcels", { search: debouncedSearch, statuses, sources, onlyIncomplete }] as const;
 
   const list = useQuery({
-    queryKey: ["jp-parcels", { search, statuses, sources, onlyIncomplete }],
+    queryKey,
     queryFn: () =>
       fetchList({
         data: {
-          search,
+          search: debouncedSearch,
           status: statuses.length ? statuses : undefined,
           source: sources.length ? sources : undefined,
           onlyIncomplete,
         },
       }),
+    placeholderData: (prev) => prev,
+    staleTime: 30_000,
   });
+
+  type ListData = Awaited<ReturnType<typeof fetchList>>;
 
   const statusMut = useMutation({
     mutationFn: (v: { id: string; status: string }) =>
       updateStatus({ data: v }),
+    onMutate: async (v) => {
+      await qc.cancelQueries({ queryKey: ["jp-parcels"] });
+      const snapshots = qc.getQueriesData<ListData>({ queryKey: ["jp-parcels"] });
+      snapshots.forEach(([key, data]) => {
+        if (!data) return;
+        qc.setQueryData<ListData>(key, {
+          ...data,
+          rows: data.rows.map((r) =>
+            r.id === v.id ? { ...r, status: v.status } : r
+          ),
+        });
+      });
+      return { snapshots };
+    },
+    onError: (e, _v, ctx) => {
+      ctx?.snapshots.forEach(([key, data]) => qc.setQueryData(key, data));
+      toast.error((e as Error).message);
+    },
     onSuccess: () => {
       toast.success("状态已更新");
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["jp-parcels"] });
     },
-    onError: (e) => toast.error((e as Error).message),
   });
 
   const rows = list.data?.rows ?? [];
