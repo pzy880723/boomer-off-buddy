@@ -116,9 +116,10 @@ function JapanParcelList() {
   const [statusFilter, setStatusFilter] = useState<SimpleStatus[]>([]);
   const [sources, setSources] = useState<string[]>([]);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
   const debouncedSearch = useDebounced(search, 300);
 
-  const queryKey = ["jp-parcels", { search: debouncedSearch, sources }] as const;
+  const queryKey = buildListKey(debouncedSearch, sources);
 
   const list = useQuery({
     queryKey,
@@ -130,7 +131,8 @@ function JapanParcelList() {
         },
       }),
     placeholderData: (prev) => prev,
-    staleTime: 30_000,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   type ListData = Awaited<ReturnType<typeof fetchList>>;
