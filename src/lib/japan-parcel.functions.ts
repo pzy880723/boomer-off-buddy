@@ -93,6 +93,21 @@ export const updateJapanParcel = createServerFn({ method: "POST" })
     return { row };
   });
 
+export const updateJapanParcelStatus = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), status: z.string().min(1) }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { data: row, error } = await supabaseAdmin
+      .from("japan_parcels")
+      .update({ status: data.status })
+      .eq("id", data.id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return { row };
+  });
+
 export const deleteJapanParcel = createServerFn({ method: "POST" })
   .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
