@@ -229,7 +229,19 @@ function NewParcelPage() {
     const startedAt = Date.now();
     try {
       // ===== Step 1: 预处理 + 分段（或 OCR + 分段） =====
-      let segments: { parcel_block: string | null; intl_fee_block: string | null; item_blocks: string[]; raw_chars: number; cleaned_chars: number };
+      let segments: {
+        parcel_block: string | null;
+        intl_fee_block: string | null;
+        item_blocks: string[];
+        hints: {
+          source_order_no: string | null;
+          tracking_no: string | null;
+          status_text: string | null;
+          sub_order_nos: string[];
+        };
+        raw_chars: number;
+        cleaned_chars: number;
+      };
       if (smartTab === "image" && smartImage) {
         upsertStep({ id: "ocr", label: "图片 OCR", status: "running", detail: "调用视觉模型读取文字…" });
         const t0 = Date.now();
