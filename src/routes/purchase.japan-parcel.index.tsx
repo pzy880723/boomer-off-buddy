@@ -58,6 +58,9 @@ import {
 } from "@/components/japan-parcel/parcel-card-dialog";
 import { ItemsHoverPreview } from "@/components/japan-parcel/items-hover-preview";
 
+const buildListKey = (search: string, sources: string[]) =>
+  ["jp-parcels", { search, sources }] as const;
+
 export const Route = createFileRoute("/purchase/japan-parcel/")({
   head: () => ({
     meta: [
@@ -65,6 +68,14 @@ export const Route = createFileRoute("/purchase/japan-parcel/")({
       { name: "description", content: "Meruki / Yahoo / Mercari 小包裹订单管理" },
     ],
   }),
+  loader: ({ context }) => {
+    // 预取空筛选下的列表，让首屏跟着 SSR 一起到位
+    context.queryClient.ensureQueryData({
+      queryKey: buildListKey("", []),
+      queryFn: () => listJapanParcels({ data: {} }),
+      staleTime: 60_000,
+    });
+  },
   component: JapanParcelList,
 });
 
