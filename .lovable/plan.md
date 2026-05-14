@@ -1,92 +1,55 @@
-## 现状判断
+## 问题
 
-我查了当前后台数据：
+点击侧边栏导航后页面要等好几秒，原因有三层：
 
-- `meruki_raw_captures` 仍然是 0 条
-- `meruki_sync_runs` 只有 5 月 12 日旧记录
-- 说明插件没有成功把任何 JSON 上报到后端
+1. **路由没有开启 hover 预加载**。`src/router.tsx` 里只设了 `defaultPreloadStaleTime: 0`，没有 `defaultPreload: "intent"`。结果是：用户**点击**那一刻才开始下载该路由的代码块、解析依赖、跑 loader——dev 模式下 Vite 每个新路由首次还要现场转换 Radix（Dialog/Sheet/Table/DropdownMenu 等）十几个组件，叠加预览代理的网络往返，第一次打开任意子页都要好几秒。
 
-当前插件只在 `https://*.meruki.cn/*` 页面注入，且只抓 `meruki.cn` 域名下的接口。问题很可能是：Meruki 实际页面或接口域名不是 `*.meruki.cn`，或者接口走了 `meruki.co.jp`、`api.xxx`、`www.xxx`、子 iframe、blob/relative 请求等，导致插件根本没注入或没命中。
+2. **刚加的账号管理 loader 是阻塞式的**。上一轮我把 `/purchase/japan-parcel/accounts` 改成了 `loader: () => listMerukiAccounts()`，TanStack 在导航完成前会**等这个 server fn 返回**才渲染页面，本地 ~250ms、走 Lovable 预览代理通常 500ms~1s，等于每次点"账号管理"都先卡半秒以上。其它页只要后续也加 loader，会有同样问题。
 
-## 修复方案
+3. **缺少 react-query 默认 staleTime**。每次进入页面 `useQuery` 都会重新发请求（默认 staleTime=0），同一页面来回切也要等。
 
-### 1. 放宽插件可运行域名
+## 改造方案
 
-更新 `extension/manifest.json`：
-
-- 增加常见 Meruki 相关域名匹配范围
-- 允许插件在更多 Meruki 页面注入
-- 临时允许捕获页面自身发出的所有 HTTPS JSON 请求，后端仍只接收带正确令牌的上报
-
-目标：先解决「抓到 JSON = 0」的问题，不再被域名猜错卡住。
-
-### 2. 增加插件自检状态
-
-更新 `content.js`、`inject.js`、`background.js`、`popup.html`、`popup.js`：
-
-- popup 显示「插件已注入当前页面」
-- popup 显示「当前页面 URL」
-- popup 显示「最近抓到的接口 URL」
-- 如果当前页面没有注入，直接提示「当前页面不在插件允许范围内」
-- 增加「重置统计」按钮，避免旧数字误导判断
-
-这样下一次你打开 popup，我能一眼判断：
-
-- 插件没注入：域名/安装问题
-- 已注入但抓到 0：页面没有发 JSON，或请求发生在 iframe/worker
-- 抓到 > 0 但发送 0：令牌/网络/后端地址问题
-- 发送 > 0 但识别 0：后端解析规则需要按真实接口结构调整
-
-### 3. 后端增加诊断接口
-
-在现有 `/api/public/meruki-ingest` 基础上保持兼容，不改令牌机制。
-
-另外新增轻量诊断：
-
-- 插件可发送一次 `ping`
-- 后端返回 `ok: true`
-- popup 显示「后端连通：正常 / 异常」
-
-这样可以排除 baseUrl 写错、发布地址不对、CORS 等问题。
-
-### 4. 重新打包插件
-
-重新生成：
-
-```text
-public/meruki-ingest-extension.zip
+### 1. 在 `src/router.tsx` 开启 intent 预加载
+```ts
+createRouter({
+  routeTree,
+  context: { queryClient },
+  scrollRestoration: true,
+  defaultPreload: "intent",        // hover/focus link 即开始拉 chunk + 跑 loader
+  defaultPreloadStaleTime: 0,
+  defaultPendingMs: 200,           // 200ms 内完成的导航不闪烁 loading
+});
 ```
+配合 react-query `defaultOptions: { queries: { staleTime: 30_000 } }`，让 30 秒内重复进入同一页直接走缓存。
 
-你需要重新下载、解压并在 Chrome 扩展页点「重新加载」或重新安装。
+效果：把"点击 → 等 chunk → 等 loader → 渲染"瀑布折叠成"hover 时已经在拉 → 点击瞬间渲染"。
 
-### 5. 下一步验证流程
+### 2. 把账号页 loader 改成非阻塞预取
+```tsx
+loader: ({ context }) => {
+  // 不 await：导航立刻完成，同时后台预热 react-query 缓存
+  context.queryClient.prefetchQuery({
+    queryKey: ["meruki-accounts"],
+    queryFn: () => listMerukiAccounts(),
+    staleTime: 10_000,
+  });
+},
+```
+组件继续用 `useQuery({ queryKey: ["meruki-accounts"], ... })`，命中缓存即同步渲染，没命中也只是首屏 loading 一下，不会再让导航本身卡住。
 
-修完后你按这个顺序验证：
+### 3. 给侧栏 Link 加 preload hint（可选锦上添花）
+`<Link to={...} preload="intent" />`——其实开了全局默认就够了，不必每个 Link 写。
 
-1. 重新安装新版插件
-2. 打开 Meruki 页面并刷新一次
-3. 点插件图标
-4. 把 popup 截图发我
+## 技术细节（仅做参考）
 
-我会根据新字段判断下一步：
+- `defaultPreload: "intent"` 是 TanStack Router 官方推荐的"零额外成本预热"方式，鼠标移过去就在后台 import 路由文件并执行 loader，不会改变可见行为。
+- `prefetchQuery` 是 fire-and-forget，对应 `tanstack-query-integration` 文档里"非关键数据"的范式；`ensureQueryData` 才会阻塞，那是给"必须有数据才能渲染"的页面用的，账号页用不到。
+- dev 模式下首次转换慢是 Vite 特性，预热把这块成本挪到了用户阅读上一页内容的空闲时间里。生产构建会一次打包，开了 intent 预加载后体感几乎瞬开。
 
-- 如果看到真实接口 URL，我就按真实 payload 改订单解析
-- 如果仍没有注入，我继续把域名范围或 iframe 注入方式扩大
-- 如果连通失败，我修后端地址/CORS/令牌校验
+## 改的文件
 
-## 技术细节
+- `src/router.tsx`：加 `defaultPreload`、`defaultPendingMs`、QueryClient 默认 `staleTime`
+- `src/routes/purchase.japan-parcel.accounts.tsx`：把 loader 改为 `prefetchQuery`，恢复 `useQuery` 主导（去掉 `initialData` / `Route.useLoaderData`）
 
-- 主要改动文件：
-  - `extension/manifest.json`
-  - `extension/inject.js`
-  - `extension/content.js`
-  - `extension/background.js`
-  - `extension/popup.html`
-  - `extension/popup.js`
-  - `src/routes/api/public/meruki-ingest.ts`
-  - `public/meruki-ingest-extension.zip`
-
-- 不改现有订单表结构
-- 不改 Meruki 账号表结构
-- 不删除现有 Cookie 同步方案，只增强插件抓取方案
-- 后端仍使用上报令牌校验，避免别人随便写入数据
+不动业务逻辑、不动 UI、不动后端。
