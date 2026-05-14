@@ -85,9 +85,12 @@ export const listJapanParcels = createServerFn({ method: "GET" })
       input ?? {},
   )
   .handler(async ({ data }) => {
+    // 列表只取首屏需要的列，剔除 raw_payload / status_timeline 等大字段，避免每行几十KB拖慢首屏
     let q = supabaseAdmin
       .from("japan_parcels")
-      .select("*, japan_parcel_items(id, sub_order_no, item_title, item_title_cn, item_image_url, item_total_jpy, item_total_cny, unit_price_jpy, quantity, weight_g)")
+      .select(
+        "id,source,source_order_no,tracking_no,status,completeness,item_title,item_title_cn,item_image_url,seller,category,total_jpy,total_cny,exchange_rate,intl_total_jpy,intl_total_cny,intl_freight_jpy,intl_reinforce_jpy,intl_merge_fee_jpy,intl_send_fee_jpy,intl_exchange_rate,tariff_jpy,grand_total_jpy,grand_total_cny,purchased_at,received_at,weight_g,created_at, japan_parcel_items(id, sub_order_no, item_title, item_title_cn, item_image_url, item_total_jpy, item_total_cny, unit_price_jpy, quantity, weight_g)",
+      )
       .order("created_at", { ascending: false });
     if (data.status?.length) q = q.in("status", data.status);
     if (data.source?.length) q = q.in("source", data.source);

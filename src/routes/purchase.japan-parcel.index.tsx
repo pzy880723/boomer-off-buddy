@@ -58,6 +58,9 @@ import {
 } from "@/components/japan-parcel/parcel-card-dialog";
 import { ItemsHoverPreview } from "@/components/japan-parcel/items-hover-preview";
 
+const buildListKey = (search: string, sources: string[]) =>
+  ["jp-parcels", { search, sources }] as const;
+
 export const Route = createFileRoute("/purchase/japan-parcel/")({
   head: () => ({
     meta: [
@@ -65,6 +68,14 @@ export const Route = createFileRoute("/purchase/japan-parcel/")({
       { name: "description", content: "Meruki / Yahoo / Mercari 小包裹订单管理" },
     ],
   }),
+  loader: ({ context }) => {
+    // 预取空筛选下的列表，让首屏跟着 SSR 一起到位
+    context.queryClient.ensureQueryData({
+      queryKey: buildListKey("", []),
+      queryFn: () => listJapanParcels({ data: {} }),
+      staleTime: 60_000,
+    });
+  },
   component: JapanParcelList,
 });
 
@@ -105,9 +116,10 @@ function JapanParcelList() {
   const [statusFilter, setStatusFilter] = useState<SimpleStatus[]>([]);
   const [sources, setSources] = useState<string[]>([]);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
   const debouncedSearch = useDebounced(search, 300);
 
-  const queryKey = ["jp-parcels", { search: debouncedSearch, sources }] as const;
+  const queryKey = buildListKey(debouncedSearch, sources);
 
   const list = useQuery({
     queryKey,
@@ -119,7 +131,8 @@ function JapanParcelList() {
         },
       }),
     placeholderData: (prev) => prev,
-    staleTime: 30_000,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   type ListData = Awaited<ReturnType<typeof fetchList>>;
@@ -160,7 +173,20 @@ function JapanParcelList() {
           .filter((u): u is { id: string; item_title_cn: string } => !!u.item_title_cn);
         if (updates.length === 0) return;
         await fnSaveTitles({ data: { updates } });
-        qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+        // 直接合并到现有缓存，避免再发一次列表请求
+        const map = new Map(updates.map((u) => [u.id, u.item_title_cn]));
+        qc.setQueriesData<ListData>({ queryKey: ["jp-parcels"] }, (data) => {
+          if (!data) return data;
+          return {
+            ...data,
+            rows: data.rows.map((row) => ({
+              ...row,
+              japan_parcel_items: (row.japan_parcel_items ?? []).map((it) =>
+                map.has(it.id) ? { ...it, item_title_cn: map.get(it.id)! } : it,
+              ),
+            })),
+          } as ListData;
+        });
       } catch {
         /* silent */
       }
@@ -384,7 +410,10 @@ function JapanParcelList() {
                       key={r.id}
                       data-state={selected.has(r.id) ? "selected" : undefined}
                       className="cursor-pointer"
-                      onClick={() => setOpenCardId(r.id)}
+                      onClick={() => {
+                        setOpenTab("overview");
+                        setOpenCardId(r.id);
+                      }}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
@@ -401,7 +430,10 @@ function JapanParcelList() {
                             item_title_cn: it.item_title_cn,
                             item_image_url: it.item_image_url,
                           }))}
-                          onClick={() => setOpenCardId(r.id)}
+                          onClick={() => {
+                            setOpenTab("overview");
+                            setOpenCardId(r.id);
+                          }}
                         />
                       </TableCell>
                       <TableCell>
@@ -466,10 +498,17 @@ function JapanParcelList() {
                               撤销签收
                             </Button>
                           )}
-                          <Button asChild variant="ghost" size="icon" className="h-7 w-7">
-                            <Link to="/purchase/japan-parcel/$id" params={{ id: r.id }} aria-label="编辑">
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Link>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label="编辑"
+                            onClick={() => {
+                              setOpenTab("edit");
+                              setOpenCardId(r.id);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -499,6 +538,7 @@ function JapanParcelList() {
         onOpenChange={(o) => !o && setOpenCardId(null)}
         parcel={openParcel}
         items={(openParcel?.japan_parcel_items ?? []) as ParcelCardItem[]}
+        defaultTab={openTab}
       />
     </div>
   );

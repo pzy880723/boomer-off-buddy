@@ -1,67 +1,65 @@
-# 包裹列表 + 子订单体验改造
 
-## 一、列表页改造（/purchase/japan-parcel）
+## 背景
 
-### 字段调整
-- **图**：仍显示第一个子订单图片；鼠标 hover 弹出 Popover，平铺显示该包裹下其他所有商品的缩略图（点击行/缩略图打开包裹详情卡片）
-- **订单编号 / 标题**：标题取「第一个子订单的中文标题」（无则取日文标题），副标题保留 `source_order_no`
-- **删除「卖家」列**（一个包裹只有一个平台，不需要展示）
-- **子单数量**：保留
-- **状态**：UI 上只展示并可切换两档：
-  - 「已采购」（默认）→ 写入 `purchased`
-  - 「已签收」→ 写入 `delivered`，且自动写入 `received_at = now()`
-  - 旧值 `at_jp_warehouse / shipping_intl / paid` 等 UI 上一律显示为「已采购」；`completed` 显示为「已签收」
-- **合计 ￥**：用「包裹合计」= 所有子订单 `item_total_jpy` + `intl_total_jpy` + `tariff_jpy`（CNY 同理用 `grand_total_*`），不再回退到 `total_jpy` 单字段
-- **采购时间**：用 `purchased_at`（即包裹的时间），保持
-- **删除「完整度」列** + 删除筛选「仅看待补全」开关
+`/purchase/japan-parcel` 列表加载慢，"编辑"目前是跳转 `/$id` 详情页。需要：
+1. 列表加载提速；
+2. 点击「编辑」改为弹出卡片编辑框，不跳页面；
+3. 编辑弹窗与详情页字段保持一致，"详情"和"编辑"展示相同的字段组。
 
-### 包裹卡片（点击行打开 Dialog）
-- 顶部：包裹号、tracking_no、状态切换按钮、合计金额
-- 商品 Grid：所有子订单图片 + 中文标题 + 单价 + 数量 + 小计
-- 费用明细：国际运费、加固、合单、关税、汇率、合计
-- 底部「打开详情页编辑」按钮 → `/purchase/japan-parcel/$id`
+数据库实际只有 1 条包裹/2 个子订单，慢的原因不在数据量，而在前端拉取链路与字段冗余。
 
-## 二、子订单图片粘贴（新建/详情页）
+---
 
-- 在子订单卡片图片区域支持：拖拽上传 / 点击上传 / **Ctrl+V 粘贴剪贴板图片**
-- 图片上传到 Lovable Cloud 存储桶 `parcel-item-images`（公共读，按 `parcel/{uuid}/item-{idx}-{rand}.png` 路径）
-- 上传完成后写入 `item_image_url`（公共 URL）
+## 一、列表加载提速
 
-## 三、子订单中文标题自动翻译
+`src/lib/japan-parcel.functions.ts` `listJapanParcels`
+- 把 `select("*")` 改成显式列表，**剔除 `raw_payload`**（每行可能几十 KB 的截图原始 JSON 是首屏卡顿元凶）和列表用不到的长字段。
+- 子查询也只 select 列表/弹窗悬浮预览必需的列（已经精简，保持）。
 
-- 在新建包裹页保存前 / 智能识别完成后，对所有 `item_title 非空 且 item_title_cn 为空` 的子订单，调用一个新 serverFn `translateTitles({titles: string[]}) → string[]`
-- 模型：`google/gemini-3-flash-preview`，system prompt：「将下列日文商品标题翻译为简洁自然的中文标题，保留品牌/型号/数字，去掉如『未使用』『中古』『送料無料』等冗余词；输出 JSON 数组」
-- 翻译触发时机：① 智能识别完成后自动批量翻译并填入；② 子订单卡片每行加「翻译」小按钮，可单条手动重译
-- 列表页打开时若发现「第一个子订单 `item_title_cn` 为空但 `item_title` 有值」，懒加载触发后台批量补翻译（一次最多 20 条）
+`src/routes/purchase.japan-parcel.index.tsx`
+- 给 Route 加 **loader**：`context.queryClient.ensureQueryData(...)`，配合 `useQuery` 的相同 queryKey，做 SSR/导航预取，首次进入不再等客户端 RTT。
+- 列表行的"编辑/详情"链接加 `preload="intent"`（虽然改成弹窗后不再跳转，但保留给浏览器地址栏直接访问的场景）。
+- 懒翻译副作用里**去掉 `qc.invalidateQueries`**，改为 `qc.setQueryData` 本地合并翻译结果，避免翻译完成后立刻再发一次列表请求。
+- `staleTime` 从 30s 提到 60s，同时给 `useQuery` 加 `refetchOnWindowFocus: false`。
 
-## 四、技术细节
+---
 
-### 数据库
-- 新建 storage bucket `parcel-item-images`（public）+ RLS 允许 anon insert/select（与现有 RLS 一致）
-- 不改任何表结构
+## 二、编辑改为弹窗 + 与详情字段对齐
 
-### 新增/修改文件
-```text
-supabase/migrations/xxx_create_parcel_images_bucket.sql
-src/lib/translate.functions.ts                         (新, translateTitles)
-src/lib/storage.functions.ts                           (新, getUploadSignedPath / 直接前端 supabase.storage.upload)
-src/components/japan-parcel/parcel-card-dialog.tsx     (新)
-src/components/japan-parcel/item-image-uploader.tsx    (新, 拖拽+点击+粘贴)
-src/components/japan-parcel/items-hover-preview.tsx    (新, hover 缩略图)
-src/lib/japan-parcel.helpers.ts                        (新增 simplifyStatus, getDisplayTitle)
-src/routes/purchase.japan-parcel.index.tsx             (列表大改)
-src/routes/purchase.japan-parcel.new.tsx               (子订单图片改用 uploader + 自动翻译)
-src/routes/purchase.japan-parcel.$id.tsx               (子订单图片改用 uploader)
-```
+### 抽取共享组件 `src/components/japan-parcel/parcel-edit-panel.tsx`
+把当前 `purchase.japan-parcel.$id.tsx` 里"详情正文"的 JSX 抽成一个纯展示/编辑组件，接收 `parcelId`、`onClose?` 作为 props，内部自己用 `useQuery(['jp-parcel', id])` 拉详情、用各 mutation 写回。包含的区块（与现有详情页一致）：
+- 左栏卡片：主图、状态徽章、完成度环、总价/物流单号/创建时间小表
+- 原始数据折叠（如有）
+- 右栏：
+  - `<ParcelForm>`（所有字段：商品、价格、物流、收货、国际物流费用明细、关税、备注）
+  - 状态时间线
+  - 子订单列表 + "编辑子订单"嵌套 Dialog
+- 底部操作：保存 / 删除 / 快捷状态切换
 
-### 状态简化映射
-```ts
-function simplifyStatus(s: string): "purchased" | "delivered" {
-  return ["delivered", "completed"].includes(s) ? "delivered" : "purchased";
-}
-```
+### 改造 `ParcelCardDialog` → 详情/编辑二合一
+当前 `ParcelCardDialog` 只展示费用摘要，字段比详情页少。改造方案：
+- Dialog 内放一个 `Tabs`：**"概览"** = 现有摘要卡片（合计、费用明细、商品网格）；**"编辑"** = 上面新建的 `<ParcelEditPanel parcelId={parcel.id} onClose={...} />`。
+- 默认打开「概览」；列表行的 ✏️ 编辑按钮直接打开并切到「编辑」Tab。
+- Dialog 容器调宽到 `max-w-5xl`，高度 `max-h-[90vh] overflow-y-auto`。
 
-## 五、不在本次范围内
-- 智能识别 pipeline 本身（已在上一轮稳定）
-- 详情页表单字段重排
-- 关税计算规则
+### 列表交互
+`purchase.japan-parcel.index.tsx`
+- 行点击 → 打开弹窗（默认"概览"Tab）。
+- ✏️ 编辑按钮 → 打开弹窗 + 直接切到"编辑"Tab（不再 `<Link>` 跳转）。
+- 保留 `purchase.japan-parcel.$id.tsx` 路由可直接访问（深链/分享），其内部直接渲染同一个 `<ParcelEditPanel>`，避免逻辑分裂。
+
+---
+
+## 三、文件改动清单
+
+- 新增 `src/components/japan-parcel/parcel-edit-panel.tsx`
+- 改 `src/components/japan-parcel/parcel-card-dialog.tsx`：加 Tabs，新增 `defaultTab` prop，宽度调大
+- 改 `src/routes/purchase.japan-parcel.index.tsx`：加 loader、改编辑按钮逻辑、调整翻译副作用、`preload="intent"`
+- 改 `src/routes/purchase.japan-parcel.$id.tsx`：瘦身为薄壳路由，渲染 `<ParcelEditPanel parcelId={id}/>`
+- 改 `src/lib/japan-parcel.functions.ts`：`listJapanParcels` 的 `select` 列表收窄，剔除 `raw_payload`
+
+## 不动
+
+- 数据库结构、RLS、识别管线、新增包裹页 `/new`。
+- 详情页路由本身仍然存在，行为只是从"独立大页面"变成"弹窗的同一面板"，没有功能丢失。
+
