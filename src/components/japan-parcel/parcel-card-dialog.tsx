@@ -18,15 +18,27 @@ import type { ParcelFormValue } from "@/components/parcel-form";
 
 export interface ParcelCardItem {
   id: string;
+  sub_order_no?: string | null;
+  merchant_order_no?: string | null;
+  source_platform?: string | null;
+  condition?: string | null;
+  addon_service?: string | null;
   item_title: string | null;
   item_title_cn: string | null;
   item_image_url: string | null;
   item_total_jpy: number | null;
   item_total_cny: number | null;
   unit_price_jpy?: number | null;
+  item_price_jpy?: number | null;
   quantity?: number | null;
   weight_g?: number | null;
-  sub_order_no?: string | null;
+  exchange_rate?: number | null;
+  service_fee_jpy?: number | null;
+  domestic_freight_jpy?: number | null;
+  freight_diff_jpy?: number | null;
+  pay_method?: string | null;
+  pay_at?: string | null;
+  notes?: string | null;
 }
 
 export interface ParcelCardData {
@@ -140,67 +152,98 @@ function OverviewItems({ items }: { items: ParcelCardItem[] }) {
       </div>
     );
   }
+  const fmtJpy = (v: number | null | undefined) =>
+    v != null ? `¥${Number(v).toLocaleString()}` : "—";
+  const fmtCny = (v: number | null | undefined) =>
+    v != null ? `￥${Number(v).toLocaleString()}` : "—";
   return (
-    <div className="grid gap-2 md:grid-cols-2">
+    <div className="grid gap-3 md:grid-cols-2">
       {items.map((it, idx) => (
-        <div key={it.id} className="flex gap-3 rounded-md border p-2">
+        <div key={it.id} className="flex gap-3 rounded-md border p-3">
           {it.item_image_url ? (
             <img
               src={it.item_image_url}
               alt=""
-              className="h-16 w-16 flex-shrink-0 rounded object-cover"
+              className="h-20 w-20 flex-shrink-0 rounded object-cover"
             />
           ) : (
-            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+            <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
               <ImageOff className="h-5 w-5" />
             </div>
           )}
           <div className="min-w-0 flex-1 text-xs">
-            <div className="font-mono text-[10px] text-muted-foreground">
-              #{idx + 1} · {it.sub_order_no || "—"}
+            <div className="flex items-start justify-between gap-2">
+              <span className="font-mono text-[10px] text-muted-foreground">
+                #{idx + 1} · {it.sub_order_no || "无单号"}
+              </span>
+              <span className="text-right font-mono text-[11px]">
+                {fmtJpy(it.item_total_jpy)}
+                {it.item_total_cny != null && (
+                  <span className="ml-1 text-muted-foreground">
+                    ≈ {fmtCny(it.item_total_cny)}
+                  </span>
+                )}
+              </span>
             </div>
             <div className="mt-0.5 line-clamp-2 text-sm font-medium">
               {it.item_title_cn || it.item_title || "(未命名)"}
             </div>
             {it.item_title_cn && it.item_title && (
-              <div className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">
+              <div className="line-clamp-1 text-[10px] text-muted-foreground">
                 {it.item_title}
               </div>
             )}
-            <div className="mt-1 grid grid-cols-3 gap-1 text-[11px]">
-              <div>
-                <div className="text-muted-foreground">单价</div>
-                <div className="font-mono">
-                  {it.unit_price_jpy != null
-                    ? `¥${Number(it.unit_price_jpy).toLocaleString()}`
-                    : "—"}
+
+            <Separator />
+            <Row label="单价" v={fmtJpy(it.unit_price_jpy)} />
+            <Row label="数量" v={it.quantity ?? "—"} />
+            <Row label="重量" v={it.weight_g != null ? `${it.weight_g}g` : "—"} />
+            <Row label="汇率" v={it.exchange_rate ?? "—"} />
+
+            <Separator />
+            <Row label="手续费" v={fmtJpy(it.service_fee_jpy)} />
+            <Row label="国内运费" v={fmtJpy(it.domestic_freight_jpy)} />
+            <Row label="运费补差" v={fmtJpy(it.freight_diff_jpy)} />
+
+            <Separator />
+            <Row label="支付方式" v={it.pay_method || "—"} />
+            <Row
+              label="支付时间"
+              v={it.pay_at ? new Date(it.pay_at).toLocaleString() : "—"}
+            />
+            <Row label="商户单号" v={it.merchant_order_no || "—"} />
+            {(it.source_platform || it.condition || it.addon_service) && (
+              <>
+                <Separator />
+                {it.source_platform && <Row label="平台" v={it.source_platform} />}
+                {it.condition && <Row label="成色" v={it.condition} />}
+                {it.addon_service && <Row label="附加服务" v={it.addon_service} />}
+              </>
+            )}
+            {it.notes && (
+              <>
+                <Separator />
+                <div className="mt-1 text-[11px] text-muted-foreground">
+                  备注：<span className="text-foreground">{it.notes}</span>
                 </div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">数量</div>
-                <div className="font-mono">{it.quantity ?? "—"}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">重量</div>
-                <div className="font-mono">
-                  {it.weight_g != null ? `${it.weight_g}g` : "—"}
-                </div>
-              </div>
-            </div>
-            <div className="mt-1 flex items-center justify-between gap-1 border-t pt-1">
-              <span className="text-muted-foreground">小计</span>
-              <span className="font-mono">
-                {it.item_total_jpy != null
-                  ? `¥${Number(it.item_total_jpy).toLocaleString()}`
-                  : "—"}
-                {it.item_total_cny != null
-                  ? ` ≈ ￥${Number(it.item_total_cny).toLocaleString()}`
-                  : ""}
-              </span>
-            </div>
+              </>
+            )}
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function Separator() {
+  return <div className="my-1.5 border-t border-dashed" />;
+}
+
+function Row({ label, v }: { label: string; v: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 text-[11px]">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono">{v}</span>
     </div>
   );
 }

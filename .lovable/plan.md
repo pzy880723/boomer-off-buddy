@@ -1,40 +1,59 @@
-# 修复包裹卡片缺失字段 + 全面升级
 
-## 根因
+## 问题
+新建包裹页（`/purchase/japan-parcel/new`）的"子订单"区共维护 **16 个字段**，但包裹卡片里展示和编辑都缺了一大半：
 
-列表接口 `listJapanParcels` 为了首屏性能只 select 了一部分列，**没有** `receiver_name / receiver_phone / receiver_address / notes / warehouse_location / intl_photo_fee_jpy / intl_keep_packaging_jpy / intl_points_used / intl_ship_method / intl_charge_method / intl_pay_method / intl_pay_at / intl_merchant_order_no` 等字段。`ParcelCardDialog` 的"概览"直接拿列表行渲染，所以这些字段一律显示 "—"。"编辑"页用的是 `ParcelEditPanel` 单独 fetch 的完整行，所以看起来"编辑里有，概览里没有"。
+| 字段 | 数据库 | 新建页 | 卡片·概览 | 卡片·编辑 |
+|---|---|---|---|---|
+| sub_order_no（订单编号） | ✅ | ✅ | ✅ | ❌ |
+| merchant_order_no（商户订单号） | ✅ | ✅ | ❌ | ❌ |
+| item_title / item_title_cn | ✅ | ✅ | ✅ | ✅ |
+| item_image_url | ✅ | ✅ | ✅ | ✅ |
+| item_total_jpy / item_total_cny | ✅ | ✅ | ✅ | ✅ |
+| unit_price_jpy（商品价格） | ✅ | ✅ | ✅ | ✅ |
+| quantity（数量） | ✅ | ✅ | ✅ | ✅ |
+| weight_g（入库重量） | ✅ | ✅ | ✅ | ✅ |
+| exchange_rate（结算汇率） | ✅ | ✅ | ❌ | ❌ |
+| service_fee_jpy（手续费） | ✅ | ✅ | ❌ | ❌ |
+| domestic_freight_jpy（日本国内运费） | ✅ | ✅ | ❌ | ❌ |
+| freight_diff_jpy（运费补差） | ✅ | ✅ | ❌ | ❌ |
+| pay_method（支付方式） | ✅ | ✅ | ❌ | ❌ |
+| pay_at（支付时间） | ✅ | ✅ | ❌ | ❌ |
+| condition（成色） | ✅ | — | ❌ | ❌ |
+| source_platform / addon_service / notes | ✅ | — | ❌ | ❌ |
 
-## 方案
+## 改动范围
 
-不动列表 select（保持首屏快），改成**打开弹窗时按 id 拉一次完整行**，概览和编辑共用同一份完整数据。
+### 1. `src/lib/japan-parcel.functions.ts` — 扩展 `ItemUpdateSchema`
+当前只允许更新 11 个字段，缺 `sub_order_no`、`merchant_order_no`、`exchange_rate`、`pay_method`、`pay_at`、`source_platform`、`condition`、`addon_service`、`item_price_jpy`。补齐为可选 nullable，让卡片编辑能保存所有字段。
 
-### 1. `parcel-card-dialog.tsx`
+### 2. `src/components/japan-parcel/parcel-edit-panel.tsx`
+- `ItemRow` 类型补齐全字段（sub_order_no / merchant_order_no / exchange_rate / service_fee_jpy / domestic_freight_jpy / freight_diff_jpy / pay_method / pay_at / source_platform / condition / addon_service / notes / item_price_jpy）。
+- `itemSaveMut.mutationFn` 提交时把全部字段一并传给 `updateParcelItem`。
+- 列表行 `itemsSlot` 新增一行密排显示：手续费 / 国内运费 / 运费补差 / 支付方式 / 支付时间 / 商户单号，让看一眼就知道有没有数据。
+- 重写"编辑子订单"弹窗：按 4 段分组（① 商品 / ② 价格与汇率 / ③ 物流与重量 / ④ 支付与单号），保持与新建页一致的字段集与顺序。弹窗加大到 `max-w-2xl`，2 列网格。
 
-- 用 `useQuery(['japan-parcel', id], () => getJapanParcel({ data: { id } }))` 在 dialog 打开时拉完整 parcel + items
-- 概览 tab 渲染 `data.row`（完整字段）+ `data.items`（完整 item 字段，含 weight_g、unit_price_jpy、quantity）
-- 加载时显示 skeleton；fallback 用列表传入的 `parcel` 先垫一下，避免闪烁
-- 删除 `parcel` / `items` props 的强依赖（保留作为 initial placeholder）
+### 3. `src/components/japan-parcel/parcel-card-dialog.tsx` — `OverviewItems`
+重排子订单卡片为分组展示，把缺的字段全部显示出来（"—"占位）：
+```text
+[图]  #1 · sub_order_no                     小计 ¥xxx ≈ ￥xxx
+      商品标题（中） / 日文标题
+      ─────────────────────────────────────────────
+      单价 ¥…  × 数量 …  · 重量 …g  · 汇率 …
+      手续费 ¥…  · 国内运费 ¥…  · 运费补差 ¥…
+      支付 …  / 支付时间 …  · 商户单号 …
+```
+保留双列 `md:grid-cols-2`；移动端单列。
 
-### 2. `parcel-edit-panel.tsx`
+### 4. （可选）`ParcelCardItem` 接口同步
+`src/components/japan-parcel/parcel-card-dialog.tsx` 里 `ParcelCardItem` 增补这些可选字段，让 TS 通过；运行时数据本来就在 `q.data.items` 里返回。
 
-- 编辑成功后 `invalidateQueries(['japan-parcel', id])`，让概览同步刷新
-- 删除子订单/编辑子订单后同样 invalidate
+## 不动的部分
+- 数据库 schema、RLS、迁移：所有字段已存在，无需 migration。
+- `getJapanParcel` 已 `select("*")`，无需改。
+- 新建页 `/purchase/japan-parcel/new` 不动。
+- 概览的 ① 包裹信息 / ② 国际物流费用明细 / ④ 合计 区块布局不动。
 
-### 3. 概览展示完善（`parcel-edit-sections.tsx` `ParcelOverviewSections`）
-
-当前 `ReadGrid` 已经覆盖 PARCEL_INFO / INTL_FEE 全部字段，只要数据传进来就会显示。无需结构改动，只需确认：
-- `receiver_address` 在 PARCEL_INFO 里 colSpan=3 ✅
-- `notes` 在 PARCEL_INFO 里 colSpan=3 ✅
-- 子订单卡片增加：重量（g）、子订单号（已有）
-
-### 4. 子订单展示小升级（`OverviewItems`）
-
-- 加一行展示 `重量 / 数量 / 单价` 三列对齐
-- 没有图片时放占位图标，不要纯灰块
-
-## 涉及文件
-
-- `src/components/japan-parcel/parcel-card-dialog.tsx` — 加 useQuery 拉完整数据，概览改用完整 row
-- `src/components/japan-parcel/parcel-edit-panel.tsx` — 保存/删除后 invalidate `['japan-parcel', id]`
-
-不改：列表 select、数据库、ParcelForm、ParcelEditSections 结构。
+## 验证
+- 打开任意包裹卡片 → 概览：每张子订单卡片都出现新的两行（费用 / 支付）。
+- 点击"编辑" → 子订单弹窗：4 段分组、所有字段可改、保存后数据回填。
+- 与 `/purchase/japan-parcel/new` 字段对照：完全对齐。
