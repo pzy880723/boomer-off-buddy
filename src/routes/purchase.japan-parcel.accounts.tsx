@@ -138,7 +138,7 @@ function AccountsPage() {
       .catch((err) => toast.error((err as Error).message));
   };
 
-  const rows = accounts.data?.rows ?? [];
+  const rows: AccountRow[] = accounts.data?.rows ?? [];
 
   return (
     <div>
