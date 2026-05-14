@@ -1,27 +1,29 @@
 // Client-safe helpers and types for the Japan parcel module.
 
 export type ParcelStatus =
-  | "bidding"
-  | "paid"
-  | "warehouse_jp"
+  | "purchased"
+  | "at_jp_warehouse"
   | "shipping_intl"
-  | "customs"
-  | "shipping_cn"
-  | "delivered";
+  | "delivered"
+  | "completed";
 
 export const PARCEL_STATUS_OPTIONS: { value: ParcelStatus; label: string }[] = [
-  { value: "bidding", label: "竞拍中" },
-  { value: "paid", label: "已付款" },
-  { value: "warehouse_jp", label: "日本仓收货" },
-  { value: "shipping_intl", label: "国际运输" },
-  { value: "customs", label: "清关中" },
-  { value: "shipping_cn", label: "国内派送" },
+  { value: "purchased", label: "已采购" },
+  { value: "at_jp_warehouse", label: "日本仓已入库" },
+  { value: "shipping_intl", label: "国际运输中" },
   { value: "delivered", label: "已签收" },
+  { value: "completed", label: "已完成" },
 ];
 
-export const PARCEL_STATUS_LABEL: Record<ParcelStatus, string> = Object.fromEntries(
-  PARCEL_STATUS_OPTIONS.map((s) => [s.value, s.label]),
-) as Record<ParcelStatus, string>;
+export const PARCEL_STATUS_LABEL: Record<string, string> = {
+  ...Object.fromEntries(PARCEL_STATUS_OPTIONS.map((s) => [s.value, s.label])),
+  // Legacy aliases for rows created before the simplified dictionary.
+  paid: "已采购",
+  bidding: "竞拍中",
+  warehouse_jp: "日本仓已入库",
+  customs: "国际运输中",
+  shipping_cn: "国际运输中",
+};
 
 export type ParcelSource =
   | "meruki"
