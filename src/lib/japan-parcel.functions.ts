@@ -87,7 +87,7 @@ export const listJapanParcels = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     let q = supabaseAdmin
       .from("japan_parcels")
-      .select("*, japan_parcel_items(id, item_title, item_image_url, item_total_jpy, item_total_cny, weight_g)")
+      .select("*, japan_parcel_items(id, sub_order_no, item_title, item_title_cn, item_image_url, item_total_jpy, item_total_cny, unit_price_jpy, quantity, weight_g)")
       .order("created_at", { ascending: false });
     if (data.status?.length) q = q.in("status", data.status);
     if (data.source?.length) q = q.in("source", data.source);
