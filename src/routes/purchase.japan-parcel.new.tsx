@@ -356,10 +356,22 @@ function NewParcelPage() {
 
       await Promise.all(tasks);
 
-      // ===== Step 3: 写入表单 =====
-      if (parcelData) setParcel((p) => mergeNonNull(p, parcelData!));
+      // ===== Step 3: 写入表单（regex hints 兜底，AI 漏抽时补上） =====
+      const parcelMerged = parcelData ?? {};
+      if (segments.hints.source_order_no && !parcelMerged.source_order_no)
+        parcelMerged.source_order_no = segments.hints.source_order_no;
+      if (segments.hints.tracking_no && !parcelMerged.tracking_no)
+        parcelMerged.tracking_no = segments.hints.tracking_no;
+      if (segments.hints.status_text && !parcelMerged.status_text)
+        parcelMerged.status_text = segments.hints.status_text;
+      if (Object.keys(parcelMerged).length) setParcel((p) => mergeNonNull(p, parcelMerged));
       if (intlData) setIntl((i) => mergeNonNull(i, intlData!));
-      const validItems = itemsData.filter(Boolean) as Record<string, unknown>[];
+      const validItems = itemsData.map((it, idx) => {
+        const merged = (it ?? {}) as Record<string, unknown>;
+        const hint = segments.hints.sub_order_nos[idx];
+        if (hint && !merged.sub_order_no) merged.sub_order_no = hint;
+        return Object.keys(merged).length ? merged : null;
+      }).filter(Boolean) as Record<string, unknown>[];
       if (validItems.length) {
         setItems(validItems.map((it) => mergeNonNull(emptyItem(), it) as SubItem));
       }
