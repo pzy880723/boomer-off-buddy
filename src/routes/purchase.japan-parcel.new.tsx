@@ -357,7 +357,7 @@ function NewParcelPage() {
       await Promise.all(tasks);
 
       // ===== Step 3: 写入表单（regex hints 兜底，AI 漏抽时补上） =====
-      const parcelMerged = parcelData ?? {};
+      const parcelMerged: Record<string, unknown> = { ...(parcelData ?? {}) };
       if (segments.hints.source_order_no && !parcelMerged.source_order_no)
         parcelMerged.source_order_no = segments.hints.source_order_no;
       if (segments.hints.tracking_no && !parcelMerged.tracking_no)
