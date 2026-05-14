@@ -9,6 +9,8 @@ import {
   Filter,
   Upload,
   ChevronDown,
+  Trash2,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/page-header";
 import { ParcelStatusBadge } from "@/components/parcel-status-badge";
 import { CompletenessRing } from "@/components/completeness-ring";
@@ -41,6 +44,8 @@ import {
 import {
   listJapanParcels,
   updateJapanParcelStatus,
+  deleteJapanParcel,
+  bulkDeleteJapanParcels,
 } from "@/lib/japan-parcel.functions";
 import { useDebounced } from "@/hooks/use-debounced";
 
@@ -58,6 +63,9 @@ function JapanParcelList() {
   const qc = useQueryClient();
   const fetchList = useServerFn(listJapanParcels);
   const updateStatus = useServerFn(updateJapanParcelStatus);
+  const delOne = useServerFn(deleteJapanParcel);
+  const delMany = useServerFn(bulkDeleteJapanParcels);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [search, setSearch] = useState("");
   const [statuses, setStatuses] = useState<string[]>([]);
@@ -117,6 +125,39 @@ function JapanParcelList() {
 
   const toggle = (arr: string[], v: string, setter: (a: string[]) => void) =>
     setter(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  };
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const toggleAll = () => {
+    setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)));
+  };
+
+  const delMut = useMutation({
+    mutationFn: (id: string) => delOne({ data: { id } }),
+    onSuccess: () => {
+      toast.success("已删除");
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const bulkMut = useMutation({
+    mutationFn: (ids: string[]) => delMany({ data: { ids } }),
+    onSuccess: (r) => {
+      toast.success(`已删除 ${r.count} 条`);
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
 
   return (
     <div>
@@ -227,6 +268,29 @@ function JapanParcelList() {
         </CardContent>
       </Card>
 
+      {selected.size > 0 && (
+        <div className="mb-3 flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm">
+          <span>已选择 {selected.size} 条</span>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={bulkMut.isPending}
+              onClick={() => {
+                if (confirm(`确认删除选中的 ${selected.size} 条订单？此操作不可恢复。`))
+                  bulkMut.mutate(Array.from(selected));
+              }}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              批量删除
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardContent className="p-0">
           {list.isLoading ? (
@@ -240,6 +304,13 @@ function JapanParcelList() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[36px]">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={toggleAll}
+                      aria-label="全选"
+                    />
+                  </TableHead>
                   <TableHead className="w-[60px]">图</TableHead>
                   <TableHead>订单号 / 标题</TableHead>
                   <TableHead>卖家</TableHead>
@@ -248,6 +319,7 @@ function JapanParcelList() {
                   <TableHead className="text-right">合计 ￥</TableHead>
                   <TableHead>采购时间</TableHead>
                   <TableHead className="text-center">完整度</TableHead>
+                  <TableHead className="w-[100px] text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -259,7 +331,14 @@ function JapanParcelList() {
                   const firstTitle = subs[0]?.item_title;
                   const firstImage = subs[0]?.item_image_url;
                   return (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} data-state={selected.has(r.id) ? "selected" : undefined}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selected.has(r.id)}
+                        onCheckedChange={() => toggleSelect(r.id)}
+                        aria-label="选中此行"
+                      />
+                    </TableCell>
                     <TableCell>
                       <Link to="/purchase/japan-parcel/$id" params={{ id: r.id }}>
                         {(r.item_image_url || firstImage) ? (
@@ -336,6 +415,27 @@ function JapanParcelList() {
                     <TableCell className="text-center">
                       <div className="flex justify-center">
                         <CompletenessRing value={r.completeness ?? 0} />
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button asChild variant="ghost" size="icon" className="h-7 w-7">
+                          <Link to="/purchase/japan-parcel/$id" params={{ id: r.id }} aria-label="编辑">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          disabled={delMut.isPending}
+                          onClick={() => {
+                            if (confirm("确认删除此订单？")) delMut.mutate(r.id);
+                          }}
+                          aria-label="删除"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

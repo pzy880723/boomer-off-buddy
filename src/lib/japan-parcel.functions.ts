@@ -146,6 +146,19 @@ export const deleteJapanParcel = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const bulkDeleteJapanParcels = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z.object({ ids: z.array(z.string().uuid()).min(1).max(500) }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { error } = await supabaseAdmin
+      .from("japan_parcels")
+      .delete()
+      .in("id", data.ids);
+    if (error) throw new Error(error.message);
+    return { ok: true, count: data.ids.length };
+  });
+
 const ItemUpdateSchema = z.object({
   id: z.string().uuid(),
   item_title: z.string().nullable().optional(),
