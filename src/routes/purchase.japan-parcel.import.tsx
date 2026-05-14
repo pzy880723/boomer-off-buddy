@@ -4,29 +4,28 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowLeft,
-  Sparkles,
   Upload,
   Loader2,
   CheckCircle2,
   XCircle,
   Trash2,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { PageHeader } from "@/components/page-header";
+import { cn } from "@/lib/utils";
 import {
-  parseMerukiListScreenshot,
-  importParsedOrders,
+  parseMerukiParcelScreenshots,
+  importParsedParcel,
+  type ParsedParent,
+  type ParsedItem,
+  type ParsedTimelineEntry,
 } from "@/lib/meruki-parse.functions";
 
 export const Route = createFileRoute("/purchase/japan-parcel/import")({
@@ -34,48 +33,88 @@ export const Route = createFileRoute("/purchase/japan-parcel/import")({
   component: ImportPage,
 });
 
-type ParsedOrder = {
-  source_order_no?: string | null;
-  item_title?: string | null;
-  item_title_cn?: string | null;
-  seller?: string | null;
-  total_jpy?: number | null;
-  price_jpy?: number | null;
-  purchased_at?: string | null;
-  status_text?: string | null;
-  status?: string;
-  already_exists?: boolean;
-  // raw passthrough for import
-  [key: string]: unknown;
-};
-
 type ImageItem = {
   id: string;
   dataUrl: string;
-  state: "pending" | "parsing" | "done" | "error";
+  mime: string;
+  state: "pending" | "uploading" | "parsing" | "done" | "error";
   reason?: string;
-  orders: ParsedOrder[];
 };
+
+type ParseResult = {
+  parent: ParsedParent;
+  items: ParsedItem[];
+  status_timeline: ParsedTimelineEntry[];
+  derived_status: string;
+  already_exists: boolean;
+};
+
+const STEPS = [
+  { key: "upload", label: "上传截图" },
+  { key: "parse", label: "AI 识别" },
+  { key: "review", label: "核对预览" },
+  { key: "import", label: "入库" },
+] as const;
+
+type StepKey = (typeof STEPS)[number]["key"];
+
+function StepBar({ current }: { current: StepKey }) {
+  const idx = STEPS.findIndex((s) => s.key === current);
+  return (
+    <div className="flex items-center gap-2">
+      {STEPS.map((s, i) => {
+        const done = i < idx;
+        const active = i === idx;
+        return (
+          <div key={s.key} className="flex items-center gap-2">
+            <div
+              className={cn(
+                "flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium",
+                done && "bg-emerald-500 text-white",
+                active && "bg-primary text-primary-foreground ring-2 ring-primary/30",
+                !done && !active && "bg-muted text-muted-foreground",
+              )}
+            >
+              {done ? "✓" : i + 1}
+            </div>
+            <span
+              className={cn(
+                "text-xs",
+                active ? "font-medium text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {s.label}
+            </span>
+            {i < STEPS.length - 1 && <div className="mx-1 h-px w-6 bg-border" />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function ImportPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
-  const parse = useServerFn(parseMerukiListScreenshot);
-  const importFn = useServerFn(importParsedOrders);
+  const parseFn = useServerFn(parseMerukiParcelScreenshots);
+  const importFn = useServerFn(importParsedParcel);
 
-  const [items, setItems] = useState<ImageItem[]>([]);
-  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [images, setImages] = useState<ImageItem[]>([]);
+  const [result, setResult] = useState<ParseResult | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const allOrders: { itemId: string; index: number; order: ParsedOrder }[] =
-    items.flatMap((it) =>
-      it.orders.map((o, index) => ({ itemId: it.id, index, order: o })),
-    );
-
-  const keyOf = (itemId: string, index: number) => `${itemId}::${index}`;
+  const currentStep: StepKey = result
+    ? "review"
+    : parsing
+      ? "parse"
+      : images.length
+        ? "upload"
+        : "upload";
 
   const addFiles = async (files: FileList | File[]) => {
-    const arr = Array.from(files);
+    const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
     const newItems: ImageItem[] = await Promise.all(
       arr.map(
         (f) =>
@@ -85,145 +124,154 @@ function ImportPage() {
               resolve({
                 id: crypto.randomUUID(),
                 dataUrl: String(r.result),
+                mime: f.type || "image/png",
                 state: "pending",
-                orders: [],
               });
             r.readAsDataURL(f);
           }),
       ),
     );
-    setItems((prev) => [...prev, ...newItems]);
-    // Auto-parse each
-    newItems.forEach((it) => parseOne(it));
+    setImages((prev) => [...prev, ...newItems]);
+    setResult(null);
+    setParseError(null);
   };
 
-  const parseOne = async (item: ImageItem) => {
-    setItems((prev) =>
-      prev.map((x) => (x.id === item.id ? { ...x, state: "parsing" } : x)),
-    );
+  const removeImage = (id: string) => {
+    setImages((prev) => prev.filter((x) => x.id !== id));
+  };
+
+  const runParse = async () => {
+    if (images.length === 0) return;
+    setParsing(true);
+    setParseError(null);
+    setResult(null);
+    setImages((prev) => prev.map((x) => ({ ...x, state: "uploading" })));
+    // small visual delay so users see "uploading" -> "parsing" transition
+    await new Promise((r) => setTimeout(r, 200));
+    setImages((prev) => prev.map((x) => ({ ...x, state: "parsing" })));
+
     try {
-      const r = await parse({
-        data: { image_base64: item.dataUrl, mime_type: "image/png" },
+      const r = await parseFn({
+        data: {
+          images: images.map((x) => ({
+            image_base64: x.dataUrl,
+            mime_type: x.mime,
+          })),
+        },
       });
       if (!r.ok) {
-        setItems((prev) =>
-          prev.map((x) =>
-            x.id === item.id ? { ...x, state: "error", reason: r.reason } : x,
-          ),
+        setParseError(r.reason ?? "AI 识别失败");
+        setImages((prev) =>
+          prev.map((x) => ({ ...x, state: "error", reason: r.reason })),
         );
-        return;
-      }
-      const orders = r.orders as ParsedOrder[];
-      setItems((prev) =>
-        prev.map((x) => (x.id === item.id ? { ...x, state: "done", orders } : x)),
-      );
-      // Default-select new (not-yet-existing) orders
-      setSelected((prev) => {
-        const next = { ...prev };
-        orders.forEach((o, index) => {
-          next[keyOf(item.id, index)] = !o.already_exists && !!o.source_order_no;
+        toast.error(`识别失败：${r.reason}`);
+      } else {
+        setResult({
+          parent: r.parent,
+          items: r.items,
+          status_timeline: r.status_timeline,
+          derived_status: r.derived_status,
+          already_exists: r.already_exists,
         });
-        return next;
-      });
+        setImages((prev) => prev.map((x) => ({ ...x, state: "done" })));
+      }
     } catch (e) {
-      setItems((prev) =>
-        prev.map((x) =>
-          x.id === item.id
-            ? { ...x, state: "error", reason: (e as Error).message }
-            : x,
-        ),
+      const msg = (e as Error).message;
+      setParseError(msg);
+      setImages((prev) =>
+        prev.map((x) => ({ ...x, state: "error", reason: msg })),
       );
+      toast.error(`识别失败：${msg}`);
+    } finally {
+      setParsing(false);
     }
   };
 
-  const removeItem = (id: string) => {
-    setItems((prev) => prev.filter((x) => x.id !== id));
-  };
-
   const importMut = useMutation({
-    mutationFn: () => {
-      const chosen = allOrders
-        .filter(({ itemId, index }) => selected[keyOf(itemId, index)])
-        .map(({ order }) => ({
-          source_order_no: order.source_order_no ?? null,
-          item_title: order.item_title ?? null,
-          item_title_cn: order.item_title_cn ?? null,
-          item_image_url: (order.item_image_url as string | null) ?? null,
-          seller: order.seller ?? null,
-          price_jpy: order.price_jpy ?? null,
-          service_fee_jpy: (order.service_fee_jpy as number | null) ?? null,
-          domestic_freight_jpy:
-            (order.domestic_freight_jpy as number | null) ?? null,
-          intl_freight_jpy: (order.intl_freight_jpy as number | null) ?? null,
-          total_jpy: order.total_jpy ?? null,
-          weight_g: (order.weight_g as number | null) ?? null,
-          warehouse_location:
-            (order.warehouse_location as string | null) ?? null,
-          tracking_no: (order.tracking_no as string | null) ?? null,
-          purchased_at: order.purchased_at ?? null,
-          status: order.status ?? "purchased",
-          notes: (order.notes as string | null) ?? null,
-        }));
-      return importFn({ data: { orders: chosen } });
+    mutationFn: (overwrite: boolean) => {
+      if (!result) throw new Error("无解析结果");
+      return importFn({
+        data: {
+          parent: result.parent,
+          items: result.items,
+          status_timeline: result.status_timeline,
+          status: result.derived_status,
+          overwrite,
+        },
+      });
     },
     onSuccess: (r) => {
-      toast.success(`导入完成：新增 ${r.inserted}，跳过 ${r.skipped}`);
+      if (!r.ok) {
+        toast.warning(r.reason ?? "未导入");
+        return;
+      }
+      toast.success(
+        r.replaced
+          ? `已覆盖更新（${r.items_inserted} 条子订单）`
+          : `导入成功（${r.items_inserted} 条子订单）`,
+      );
       qc.invalidateQueries({ queryKey: ["jp-parcels"] });
-      nav({ to: "/purchase/japan-parcel" });
+      if (r.parent_id) nav({ to: "/purchase/japan-parcel/$id", params: { id: r.parent_id } });
     },
     onError: (e) => toast.error((e as Error).message),
   });
 
-  const selectedCount = Object.values(selected).filter(Boolean).length;
-  const totalParsed = allOrders.length;
+  const updateParentField = (key: keyof ParsedParent, val: string | number | null) => {
+    if (!result) return;
+    setResult({ ...result, parent: { ...result.parent, [key]: val } });
+  };
+
+  const updateItemField = (
+    idx: number,
+    key: keyof ParsedItem,
+    val: string | number | null,
+  ) => {
+    if (!result) return;
+    const items = result.items.map((it, i) => (i === idx ? { ...it, [key]: val } : it));
+    setResult({ ...result, items });
+  };
+
+  const removeItem = (idx: number) => {
+    if (!result) return;
+    setResult({ ...result, items: result.items.filter((_, i) => i !== idx) });
+  };
+
+  const progressPct = result ? 75 : parsing ? 40 : images.length ? 15 : 0;
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="截图批量导入"
-        description="用浏览器全屏截图插件抓 meruki 订单列表 → 拖到下面 → AI 自动解析 → 勾选导入"
+        description="一次拖入同一个大包裹的多张截图（订单基础 / 状态时间线 / 国际物流费用 / 子订单），AI 自动识别成父订单 + 子订单"
         actions={
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => nav({ to: "/purchase/japan-parcel" })}
-            >
-              <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> 返回
-            </Button>
-            <Button
-              size="sm"
-              className="bg-gradient-brand hover:opacity-90"
-              disabled={selectedCount === 0 || importMut.isPending}
-              onClick={() => importMut.mutate()}
-            >
-              {importMut.isPending ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Upload className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              导入选中 ({selectedCount})
-            </Button>
-          </>
+          <Button variant="outline" size="sm" onClick={() => nav({ to: "/purchase/japan-parcel" })}>
+            <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> 返回
+          </Button>
         }
       />
 
-      <Card className="mb-4">
-        <CardContent className="py-5">
-          <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
-            <p className="mb-2 font-medium text-foreground">📌 推荐截图工具</p>
-            <ul className="list-disc space-y-0.5 pl-5">
-              <li>
-                <b>GoFullPage</b>（Chrome/Edge 商店搜索安装，最推荐）— 一键把整页订单列表拼成一张 PNG
-              </li>
-              <li>
-                <b>FireShot</b> / <b>Awesome Screenshot</b>— 同类全屏截图插件
-              </li>
-            </ul>
-            <p className="mt-2">
-              员工日常 SOP：打开 meruki 订单列表 → 点截图插件 → 把保存的图直接拖到下方，或粘贴
-              (<kbd className="rounded border bg-background px-1">Ctrl/⌘+V</kbd>) 也行。
-            </p>
+      <Card>
+        <CardContent className="space-y-3 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <StepBar current={currentStep} />
+            <div className="text-xs text-muted-foreground">
+              {images.length} 张图 · {result?.items.length ?? 0} 条子订单
+            </div>
+          </div>
+          <Progress value={progressPct} className="h-1.5" />
+        </CardContent>
+      </Card>
+
+      {/* Upload area */}
+      <Card>
+        <CardContent className="space-y-3 py-4">
+          <div className="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
+            <p className="mb-1 font-medium text-foreground">📌 推荐工作流</p>
+            <ol className="list-decimal space-y-0.5 pl-5">
+              <li>用 <b>GoFullPage</b> / <b>FireShot</b> 把 meruki 大包裹详情页整页截图</li>
+              <li>或者 F12 设备模式下分块截：订单基础信息 / 订单状态 / 国际物流费用明细 / 每个子订单</li>
+              <li>把这些图（属于同一个大包裹）一次性拖到下方 → 点"开始 AI 识别"</li>
+            </ol>
           </div>
 
           <div
@@ -233,11 +281,11 @@ function ImportPage() {
               if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
             }}
             onClick={() => inputRef.current?.click()}
-            className="mt-4 flex min-h-[140px] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed p-6 text-center hover:border-primary/50 hover:bg-muted/30"
+            className="flex min-h-[120px] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed p-6 text-center hover:border-primary/50 hover:bg-muted/30"
           >
             <Upload className="h-6 w-6 text-muted-foreground" />
-            <p className="text-sm font-medium">拖入一张或多张订单截图</p>
-            <p className="text-xs text-muted-foreground">支持 PNG / JPG，可一次选多张</p>
+            <p className="text-sm font-medium">拖入或点击选择多张截图</p>
+            <p className="text-xs text-muted-foreground">同一个大包裹的所有截图请一次性放进来</p>
             <input
               ref={inputRef}
               type="file"
@@ -250,170 +298,269 @@ function ImportPage() {
               }}
             />
           </div>
+
+          {images.length > 0 && (
+            <>
+              <div className="grid grid-cols-3 gap-2 md:grid-cols-5 lg:grid-cols-6">
+                {images.map((it, i) => (
+                  <div key={it.id} className="group relative rounded-md border p-1.5">
+                    <div className="absolute left-1 top-1 z-10 rounded bg-background/80 px-1 text-[10px] font-medium">
+                      #{i + 1}
+                    </div>
+                    <img src={it.dataUrl} alt="" className="h-24 w-full rounded object-cover" />
+                    <div className="mt-1 flex items-center justify-between text-[11px]">
+                      {it.state === "pending" && <span className="text-muted-foreground">待处理</span>}
+                      {it.state === "uploading" && (
+                        <span className="flex items-center gap-1 text-blue-600">
+                          <Loader2 className="h-3 w-3 animate-spin" /> 上传中
+                        </span>
+                      )}
+                      {it.state === "parsing" && (
+                        <span className="flex items-center gap-1 text-amber-600">
+                          <Loader2 className="h-3 w-3 animate-spin" /> 识别中
+                        </span>
+                      )}
+                      {it.state === "done" && (
+                        <span className="flex items-center gap-1 text-emerald-600">
+                          <CheckCircle2 className="h-3 w-3" /> 完成
+                        </span>
+                      )}
+                      {it.state === "error" && (
+                        <span
+                          className="flex items-center gap-1 text-destructive"
+                          title={it.reason}
+                        >
+                          <XCircle className="h-3 w-3" /> 失败
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeImage(it.id);
+                        }}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setImages([]);
+                    setResult(null);
+                    setParseError(null);
+                  }}
+                  disabled={parsing}
+                >
+                  清空
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-gradient-brand hover:opacity-90"
+                  disabled={parsing || images.length === 0}
+                  onClick={runParse}
+                >
+                  {parsing ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {result ? "重新识别" : "开始 AI 识别"}
+                </Button>
+              </div>
+
+              {parseError && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+                  <div className="font-medium">识别失败</div>
+                  <div className="mt-1 break-words">{parseError}</div>
+                </div>
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
 
-      {items.length > 0 && (
-        <Card className="mb-4">
-          <CardContent className="grid grid-cols-2 gap-3 py-3 md:grid-cols-4 lg:grid-cols-6">
-            {items.map((it) => (
-              <div key={it.id} className="relative rounded-md border p-2">
-                <img
-                  src={it.dataUrl}
-                  alt=""
-                  className="h-24 w-full rounded object-cover"
-                />
-                <div className="mt-1.5 flex items-center justify-between text-xs">
-                  {it.state === "parsing" && (
-                    <span className="flex items-center gap-1 text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" /> 解析中
-                    </span>
-                  )}
-                  {it.state === "done" && (
-                    <span className="flex items-center gap-1 text-emerald-600">
-                      <CheckCircle2 className="h-3 w-3" /> {it.orders.length} 条
-                    </span>
-                  )}
-                  {it.state === "error" && (
-                    <span
-                      className="flex items-center gap-1 text-destructive"
-                      title={it.reason}
-                    >
-                      <XCircle className="h-3 w-3" /> 失败
-                    </span>
-                  )}
-                  {it.state === "pending" && (
-                    <span className="text-muted-foreground">等待…</span>
-                  )}
-                  <button
-                    onClick={() => removeItem(it.id)}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+      {/* Preview / edit */}
+      {result && (
+        <>
+          <Card>
+            <CardContent className="space-y-4 py-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">父订单（大包裹）</h3>
+                {result.already_exists && (
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
+                    已存在同单号
+                  </span>
+                )}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <Field label="父订单号" v={result.parent.source_order_no ?? ""} onChange={(v) => updateParentField("source_order_no", v)} />
+                <Field label="国际物流单号" v={result.parent.tracking_no ?? ""} onChange={(v) => updateParentField("tracking_no", v)} />
+                <Field label="状态原文" v={result.parent.status_text ?? ""} onChange={(v) => updateParentField("status_text", v)} />
+                <Field label="总重量 (g)" type="number" v={result.parent.total_weight_g ?? ""} onChange={(v) => updateParentField("total_weight_g", v === "" ? null : Number(v))} />
+                <Field label="体积 (cm³)" type="number" v={result.parent.volume_cm3 ?? ""} onChange={(v) => updateParentField("volume_cm3", v === "" ? null : Number(v))} />
+                <Field label="最大边长 (cm)" type="number" v={result.parent.max_side_cm ?? ""} onChange={(v) => updateParentField("max_side_cm", v === "" ? null : Number(v))} />
+                <Field label="收货人" v={result.parent.receiver_name ?? ""} onChange={(v) => updateParentField("receiver_name", v)} />
+                <Field label="电话" v={result.parent.receiver_phone ?? ""} onChange={(v) => updateParentField("receiver_phone", v)} />
+                <Field label="收货地址" v={result.parent.receiver_address ?? ""} onChange={(v) => updateParentField("receiver_address", v)} />
+              </div>
+
+              <div className="border-t pt-3">
+                <h4 className="mb-2 text-xs font-semibold text-muted-foreground">国际物流费用明细</h4>
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  <Field label="总计 JPY" type="number" v={result.parent.intl_total_jpy ?? ""} onChange={(v) => updateParentField("intl_total_jpy", v === "" ? null : Number(v))} />
+                  <Field label="总计 CNY" type="number" v={result.parent.intl_total_cny ?? ""} onChange={(v) => updateParentField("intl_total_cny", v === "" ? null : Number(v))} />
+                  <Field label="国际物流费 JPY" type="number" v={result.parent.intl_freight_jpy ?? ""} onChange={(v) => updateParentField("intl_freight_jpy", v === "" ? null : Number(v))} />
+                  <Field label="发送方式" v={result.parent.intl_ship_method ?? ""} onChange={(v) => updateParentField("intl_ship_method", v)} />
+                  <Field label="收费方式" v={result.parent.intl_charge_method ?? ""} onChange={(v) => updateParentField("intl_charge_method", v)} />
+                  <Field label="强化加固 JPY" type="number" v={result.parent.intl_reinforce_jpy ?? ""} onChange={(v) => updateParentField("intl_reinforce_jpy", v === "" ? null : Number(v))} />
+                  <Field label="发送手续费 JPY" type="number" v={result.parent.intl_send_fee_jpy ?? ""} onChange={(v) => updateParentField("intl_send_fee_jpy", v === "" ? null : Number(v))} />
+                  <Field label="拍照费 JPY" type="number" v={result.parent.intl_photo_fee_jpy ?? ""} onChange={(v) => updateParentField("intl_photo_fee_jpy", v === "" ? null : Number(v))} />
+                  <Field label="合单手续费 JPY" type="number" v={result.parent.intl_merge_fee_jpy ?? ""} onChange={(v) => updateParentField("intl_merge_fee_jpy", v === "" ? null : Number(v))} />
                 </div>
               </div>
-            ))}
-          </CardContent>
-        </Card>
+
+              {result.status_timeline.length > 0 && (
+                <div className="border-t pt-3">
+                  <h4 className="mb-2 text-xs font-semibold text-muted-foreground">状态时间线</h4>
+                  <ul className="space-y-1 text-xs">
+                    {result.status_timeline.map((t, i) => (
+                      <li key={i} className="flex gap-3">
+                        <span className="font-mono text-muted-foreground">{t.at ?? "—"}</span>
+                        <span>{t.text ?? "—"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="space-y-3 py-4">
+              <h3 className="text-sm font-semibold">
+                子订单 <span className="text-muted-foreground font-normal">({result.items.length})</span>
+              </h3>
+              {result.items.length === 0 && (
+                <p className="text-xs text-muted-foreground">未识别到子订单</p>
+              )}
+              <div className="space-y-3">
+                {result.items.map((it, idx) => (
+                  <div key={idx} className="rounded-md border p-3">
+                    <div className="mb-2 flex items-start gap-3">
+                      {it.item_image_url ? (
+                        <img src={it.item_image_url} alt="" className="h-16 w-16 flex-shrink-0 rounded object-cover" />
+                      ) : (
+                        <div className="h-16 w-16 flex-shrink-0 rounded bg-muted" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-xs text-muted-foreground">
+                            #{idx + 1} · {it.sub_order_no || "无子单号"}
+                          </span>
+                          <button onClick={() => removeItem(idx)} className="text-muted-foreground hover:text-destructive">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="mt-1 truncate text-sm font-medium">
+                          {it.item_title || it.item_title_cn || "(未命名)"}
+                        </div>
+                        <div className="mt-0.5 text-xs text-muted-foreground">
+                          {it.source_platform || "—"} · {it.condition || "—"} · 入库 {it.weight_g ?? "—"}g
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid gap-2 text-xs md:grid-cols-3 lg:grid-cols-4">
+                      <Field label="单价 JPY" type="number" v={it.unit_price_jpy ?? ""} onChange={(v) => updateItemField(idx, "unit_price_jpy", v === "" ? null : Number(v))} />
+                      <Field label="数量" type="number" v={it.quantity ?? ""} onChange={(v) => updateItemField(idx, "quantity", v === "" ? null : Number(v))} />
+                      <Field label="商品费用 JPY" type="number" v={it.item_total_jpy ?? ""} onChange={(v) => updateItemField(idx, "item_total_jpy", v === "" ? null : Number(v))} />
+                      <Field label="商品费用 CNY" type="number" v={it.item_total_cny ?? ""} onChange={(v) => updateItemField(idx, "item_total_cny", v === "" ? null : Number(v))} />
+                      <Field label="商品价格 JPY" type="number" v={it.item_price_jpy ?? ""} onChange={(v) => updateItemField(idx, "item_price_jpy", v === "" ? null : Number(v))} />
+                      <Field label="手续费 JPY" type="number" v={it.service_fee_jpy ?? ""} onChange={(v) => updateItemField(idx, "service_fee_jpy", v === "" ? null : Number(v))} />
+                      <Field label="日本国内运费 JPY" type="number" v={it.domestic_freight_jpy ?? ""} onChange={(v) => updateItemField(idx, "domestic_freight_jpy", v === "" ? null : Number(v))} />
+                      <Field label="运费补差 JPY" type="number" v={it.freight_diff_jpy ?? ""} onChange={(v) => updateItemField(idx, "freight_diff_jpy", v === "" ? null : Number(v))} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-2 border-t pt-3">
+                <Button variant="outline" size="sm" onClick={runParse} disabled={parsing}>
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> 重新识别
+                </Button>
+                {result.already_exists && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => importMut.mutate(true)}
+                    disabled={importMut.isPending}
+                  >
+                    覆盖更新
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  className="bg-gradient-brand hover:opacity-90"
+                  onClick={() => importMut.mutate(false)}
+                  disabled={importMut.isPending || !result.parent.source_order_no}
+                >
+                  {importMut.isPending ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Upload className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  确认导入
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </>
       )}
 
-      {totalParsed > 0 && (
-        <Card>
-          <CardContent className="p-0">
-            <div className="flex items-center justify-between border-b px-4 py-2 text-sm">
-              <div>
-                共解析出 <b>{totalParsed}</b> 条订单 · 已选 <b>{selectedCount}</b> 条
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    const all: Record<string, boolean> = {};
-                    allOrders.forEach(({ itemId, index, order }) => {
-                      all[keyOf(itemId, index)] =
-                        !order.already_exists && !!order.source_order_no;
-                    });
-                    setSelected(all);
-                  }}
-                >
-                  仅选新单
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelected({})}
-                >
-                  清空选择
-                </Button>
-              </div>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[40px]"></TableHead>
-                  <TableHead>订单号</TableHead>
-                  <TableHead>标题</TableHead>
-                  <TableHead>卖家</TableHead>
-                  <TableHead className="text-right">金额 ¥</TableHead>
-                  <TableHead>状态文本</TableHead>
-                  <TableHead className="text-center">情况</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {allOrders.map(({ itemId, index, order }) => {
-                  const k = keyOf(itemId, index);
-                  return (
-                    <TableRow key={k}>
-                      <TableCell>
-                        <Checkbox
-                          checked={!!selected[k]}
-                          onCheckedChange={(v) =>
-                            setSelected((p) => ({ ...p, [k]: !!v }))
-                          }
-                        />
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {order.source_order_no || (
-                          <span className="text-destructive">缺单号</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate text-sm">
-                        {order.item_title || order.item_title_cn || "—"}
-                      </TableCell>
-                      <TableCell className="text-sm">{order.seller || "—"}</TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {order.total_jpy != null
-                          ? `¥${Number(order.total_jpy).toLocaleString()}`
-                          : order.price_jpy != null
-                            ? `¥${Number(order.price_jpy).toLocaleString()}`
-                            : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {order.status_text || "—"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {order.already_exists ? (
-                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
-                            已存在
-                          </span>
-                        ) : !order.source_order_no ? (
-                          <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">
-                            无效
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">
-                            新订单
-                          </span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {items.length === 0 && (
+      {images.length === 0 && !result && (
         <p className="text-center text-xs text-muted-foreground">
-          也可以走旧的{" "}
-          <Link
-            to="/purchase/japan-parcel/new"
-            search={{ tab: "ai" as const }}
-            className="underline"
-          >
+          也可以走{" "}
+          <Link to="/purchase/japan-parcel/new" search={{ tab: "ai" as const }} className="underline">
             单条 AI 识图
-          </Link>
-          {" "}或{" "}
+          </Link>{" "}
+          或{" "}
           <Link to="/purchase/japan-parcel/new" className="underline">
             手动新建
           </Link>
           。
         </p>
       )}
+    </div>
+  );
+}
+
+function Field({
+  label,
+  v,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  v: string | number;
+  onChange: (v: string) => void;
+  type?: "text" | "number";
+}) {
+  return (
+    <div className="grid gap-1">
+      <Label className="text-[11px] text-muted-foreground">{label}</Label>
+      <Input
+        className="h-8 text-xs"
+        type={type}
+        value={v as string | number}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </div>
   );
 }
