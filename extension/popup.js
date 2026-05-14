@@ -3,9 +3,18 @@ const $ = (id) => document.getElementById(id);
 function shortUrl(u) {
   try {
     const x = new URL(u);
-    return x.pathname + (x.search ? x.search.slice(0, 40) : "");
+    return x.host + x.pathname + (x.search ? x.search.slice(0, 40) : "");
   } catch {
     return u;
+  }
+}
+
+async function getActiveTab() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    return tab || null;
+  } catch {
+    return null;
   }
 }
 
@@ -33,6 +42,30 @@ async function load() {
   $("urls").innerHTML = urls.length
     ? urls.map((u) => `<div title="${u}">${shortUrl(u)}</div>`).join("")
     : "<em>暂无</em>";
+
+  // 当前页面注入状态
+  const tab = await getActiveTab();
+  const pageUrl = tab?.url || "—";
+  $("pageUrl").textContent = pageUrl;
+  const injMap = s.injectedTabs || {};
+  const inj = tab?.id != null ? injMap[tab.id] : null;
+  const isMerukiUrl = /meruki/i.test(pageUrl);
+  if (!tab) {
+    $("injState").className = "badge warn";
+    $("injState").textContent = "无活动标签";
+  } else if (inj?.isMeruki) {
+    $("injState").className = "badge ok";
+    $("injState").textContent = "✓ 已注入 Meruki 页面";
+  } else if (inj && !inj.isMeruki) {
+    $("injState").className = "badge warn";
+    $("injState").textContent = "插件已加载，但当前页非 Meruki";
+  } else if (isMerukiUrl) {
+    $("injState").className = "badge warn";
+    $("injState").textContent = "未注入，请刷新此页面";
+  } else {
+    $("injState").className = "badge warn";
+    $("injState").textContent = "请打开 Meruki 页面";
+  }
 }
 
 $("save").addEventListener("click", async () => {
@@ -42,6 +75,29 @@ $("save").addEventListener("click", async () => {
   });
   $("save").textContent = "已保存 ✓";
   setTimeout(() => ($("save").textContent = "保存"), 1200);
+});
+
+$("reset").addEventListener("click", async () => {
+  await new Promise((r) => chrome.runtime.sendMessage({ type: "meruki-reset" }, r));
+  load();
+});
+
+$("ping").addEventListener("click", async () => {
+  $("pingState").className = "badge warn";
+  $("pingState").textContent = "测试中…";
+  const res = await new Promise((r) => chrome.runtime.sendMessage({ type: "meruki-ping" }, r));
+  if (res?.ok) {
+    $("pingState").className = "badge ok";
+    $("pingState").textContent = `✓ 连通 (HTTP ${res.status})`;
+  } else if (res?.status === 401 || res?.body?.error === "unknown ingest_token") {
+    $("pingState").className = "badge warn";
+    $("pingState").textContent = "可达但令牌无效";
+  } else {
+    $("pingState").className = "badge bad";
+    $("pingState").textContent = res?.error
+      ? `失败：${res.error.slice(0, 60)}`
+      : `HTTP ${res?.status || "?"}`;
+  }
 });
 
 load();

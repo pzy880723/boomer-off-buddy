@@ -126,12 +126,29 @@ export const Route = createFileRoute("/api/public/meruki-ingest")({
     handlers: {
       OPTIONS: async () => new Response(null, { status: 204, headers: CORS }),
 
+      GET: async () => json({ ok: true, service: "meruki-ingest", ping: true }),
+
       POST: async ({ request }) => {
         let body: unknown;
         try {
           body = await request.json();
         } catch {
           return json({ error: "invalid json" }, 400);
+        }
+        // Lightweight ping path used by the extension popup to verify
+        // connectivity + base URL without requiring a valid token.
+        if (body && typeof body === "object" && (body as Record<string, unknown>).ping === true) {
+          const tok = (body as Record<string, unknown>).ingest_token;
+          let tokenOk: boolean | null = null;
+          if (typeof tok === "string" && /^[0-9a-f-]{36}$/i.test(tok)) {
+            const { data } = await supabaseAdmin
+              .from("meruki_accounts")
+              .select("id")
+              .eq("ingest_token", tok)
+              .maybeSingle();
+            tokenOk = !!data;
+          }
+          return json({ ok: true, ping: true, tokenOk });
         }
         const parsed = Schema.safeParse(body);
         if (!parsed.success) {
