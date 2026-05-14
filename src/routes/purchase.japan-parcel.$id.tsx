@@ -40,16 +40,28 @@ function ParcelDetail() {
   const [form, setForm] = useState<ParcelFormValue>({});
   useEffect(() => {
     if (q.data?.row) {
-      const r = q.data.row;
+      const r = q.data.row as Record<string, unknown>;
       const f: ParcelFormValue = {};
       Object.entries(r).forEach(([k, v]) => {
-        if (k !== "raw_payload" && k !== "completeness" && k !== "created_at" && k !== "updated_at" && k !== "account_id") {
-          f[k] = v as string | number | null;
+        if (
+          k !== "raw_payload" &&
+          k !== "completeness" &&
+          k !== "created_at" &&
+          k !== "updated_at" &&
+          k !== "account_id" &&
+          k !== "status_timeline"
+        ) {
+          if (v === null || typeof v === "string" || typeof v === "number") {
+            f[k] = v as string | number | null;
+          }
         }
       });
       setForm(f);
     }
   }, [q.data]);
+  const items = q.data?.items ?? [];
+  const timeline = (q.data?.row as { status_timeline?: { at?: string | null; text?: string | null }[] } | undefined)
+    ?.status_timeline ?? [];
 
   const saveMut = useMutation({
     mutationFn: () => update({ data: { id, ...form } as never }),
