@@ -80,74 +80,79 @@ export function ItemImageUploader({
   }, [focused, handleFile]);
 
   return (
-    <div
-      ref={boxRef}
-      tabIndex={0}
-      role="button"
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      onClick={() => inputRef.current?.click()}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+    <div className={`flex flex-col items-center gap-1.5 ${className?.includes("h-16") ? "" : ""}`}>
+      <div
+        ref={boxRef}
+        tabIndex={0}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onDragOver={(e) => {
           e.preventDefault();
-          inputRef.current?.click();
-        }
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setHover(true);
-      }}
-      onDragLeave={() => setHover(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setHover(false);
-        const f = e.dataTransfer.files?.[0];
-        if (f) void handleFile(f);
-      }}
-      className={`group relative flex h-28 w-28 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md border-2 border-dashed text-center text-[10px] transition-colors ${
-        hover || focused ? "border-primary bg-primary/5" : "border-border bg-muted/30 hover:border-primary/50"
-      } ${className ?? ""}`}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void handleFile(f);
-          e.target.value = "";
+          setHover(true);
         }}
-      />
-      {value ? (
-        <>
-          <img src={value} alt="" className="h-full w-full object-cover" />
-          {!uploading && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onChange(null);
-              }}
-              className="absolute right-1 top-1 rounded bg-black/60 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
-              aria-label="移除图片"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          )}
-        </>
-      ) : (
-        <div className="flex flex-col items-center gap-1 px-1 text-muted-foreground">
-          <ImageIcon className="h-5 w-5" />
-          <div>点击 / 拖拽 / 粘贴</div>
-          <div className="text-[9px] opacity-70">{focused ? "可 Ctrl+V" : "点此后可粘贴"}</div>
-        </div>
-      )}
-      {uploading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
-          <Loader2 className="h-5 w-5 animate-spin" />
-        </div>
-      )}
+        onDragLeave={() => setHover(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setHover(false);
+          const f = e.dataTransfer.files?.[0];
+          if (f) void handleFile(f);
+        }}
+        className={`group relative flex h-28 w-28 flex-shrink-0 items-center justify-center overflow-hidden rounded-md border-2 border-dashed text-center text-[10px] outline-none transition-colors ${
+          hover || focused ? "border-primary bg-primary/5" : "border-border bg-muted/30"
+        } ${className ?? ""}`}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleFile(f);
+            e.target.value = "";
+          }}
+        />
+        {value ? (
+          <>
+            <img src={value} alt="" className="h-full w-full object-cover" />
+            {!uploading && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange(null);
+                }}
+                className="absolute right-1 top-1 rounded bg-black/60 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                aria-label="移除图片"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-1 px-1 text-muted-foreground">
+            <ImageIcon className="h-5 w-5" />
+            <div>{focused ? "Ctrl+V 粘贴" : "点此后可粘贴"}</div>
+            <div className="text-[9px] opacity-70">或拖拽图片到此</div>
+          </div>
+        )}
+        {uploading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
+            <Loader2 className="h-5 w-5 animate-spin" />
+          </div>
+        )}
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7 w-28 px-2 text-[11px]"
+        onClick={() => inputRef.current?.click()}
+        disabled={uploading}
+      >
+        <Upload className="mr-1 h-3 w-3" />
+        {value ? "替换图片" : "上传图片"}
+      </Button>
     </div>
   );
 }
@@ -160,15 +165,5 @@ export function ItemImageUploaderCompact({
   value: string | null;
   onChange: (url: string | null) => void;
 }) {
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <ItemImageUploader value={value} onChange={onChange} className="h-16 w-16" />
-      {!value && (
-        <Button type="button" variant="ghost" size="sm" className="h-5 px-1 text-[10px]">
-          <Upload className="mr-0.5 h-2.5 w-2.5" />
-          上传
-        </Button>
-      )}
-    </div>
-  );
+  return <ItemImageUploader value={value} onChange={onChange} className="h-16 w-16" />;
 }
