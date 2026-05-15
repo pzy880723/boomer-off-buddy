@@ -279,6 +279,7 @@ export function ParcelOverviewSections({
   itemsSlot: React.ReactNode;
   tariffJpy?: number;
 }) {
+  const [currency] = useCurrencyDisplay();
   const intlTotal = num(value.intl_total_jpy);
   const rate = num(value.intl_exchange_rate);
   // 日本侧 JPY 合计 = 商品 + 国际物流（关税不计入 JPY）
@@ -340,18 +341,23 @@ export function ParcelOverviewSections({
         </div>
         <div className="mt-3 flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1">
           <span className="text-sm text-muted-foreground">合计</span>
-          <span className="font-mono text-2xl font-semibold">
-            ¥{grandJpy.toLocaleString()}
-            <span className="ml-1 text-xs text-muted-foreground">JPY</span>
-          </span>
-          {grandCny != null && (
+          {currency !== "cny" && (
+            <span className="font-mono text-2xl font-semibold">
+              ¥{grandJpy.toLocaleString()}
+              <span className="ml-1 text-xs text-muted-foreground">JPY</span>
+            </span>
+          )}
+          {currency !== "jpy" && grandCny != null && (
             <span className="font-mono text-2xl font-semibold">
               ￥{grandCny.toLocaleString()}
               <span className="ml-1 text-xs text-muted-foreground">CNY</span>
             </span>
           )}
+          {currency === "jpy" && grandCny == null && (
+            <span className="text-xs text-muted-foreground">（无汇率）</span>
+          )}
         </div>
-        {grandCny != null && (
+        {currency === "both" && grandCny != null && (
           <div className="mt-1 text-right font-mono text-[11px] text-muted-foreground">
             日本侧 ¥{grandJpy.toLocaleString()} + 关税{" "}
             {tariffCny != null ? `￥${tariffCny.toLocaleString()}` : "—"}
