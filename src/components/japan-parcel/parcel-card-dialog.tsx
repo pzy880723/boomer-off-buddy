@@ -103,7 +103,6 @@ export function ParcelCardDialog({
     (s, it) => s + (Number(it.item_total_jpy) || 0),
     0,
   );
-  const freightDiffJpy = sumFreightDiffJpy(fullItems);
   const tariffJpy = sumTariffJpy(fullItems);
   const simple = simplifyStatus(parcel.status);
 
@@ -137,7 +136,6 @@ export function ParcelCardDialog({
               <ParcelOverviewSections
                 value={fullRow}
                 itemsTotalJpy={itemsTotalJpy}
-                freightDiffJpy={freightDiffJpy}
                 tariffJpy={tariffJpy}
                 itemsSlot={<OverviewItems items={fullItems} />}
               />
