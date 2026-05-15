@@ -25,14 +25,10 @@ import {
   computeGrandTotal,
 } from "@/lib/japan-parcel.helpers";
 import { createJapanParcel, bulkCreateParcelItems } from "@/lib/japan-parcel.functions";
-import type { RecognizedResult } from "@/components/japan-parcel/smart-recognize-panel";
-
-// Lazy-load the heavy AI recognition panel — keeps initial route chunk small
-const SmartRecognizePanel = lazy(() =>
-  import("@/components/japan-parcel/smart-recognize-panel").then((m) => ({
-    default: m.SmartRecognizePanel,
-  })),
-);
+import {
+  SmartRecognizePanel,
+  type RecognizedResult,
+} from "@/components/japan-parcel/smart-recognize-panel";
 
 const ItemImageUploader = lazy(() =>
   import("@/components/japan-parcel/item-image-uploader").then((m) => ({
