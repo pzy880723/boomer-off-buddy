@@ -64,6 +64,8 @@ type ItemRow = {
   pay_method: string | null;
   pay_at: string | null;
   notes: string | null;
+  tariff_category: string | null;
+  tariff_rate: number | null;
 };
 
 const EXCLUDED_KEYS = new Set([
