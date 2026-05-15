@@ -284,10 +284,10 @@ export function ParcelOverviewSections({
   const computedJpy = itemsTotalJpy + intlTotal;
   const grandJpy =
     value.grand_total_jpy != null ? num(value.grand_total_jpy) : computedJpy;
-  const tariffCny = rate > 0 ? Math.round((tariffJpy / rate) * 100) / 100 : null;
+  const tariffCny = rate > 0 ? Math.round((tariffJpy * rate) * 100) / 100 : null;
   const computedCny =
     rate > 0
-      ? Math.round((grandJpy / rate + (tariffCny ?? 0)) * 100) / 100
+      ? Math.round((grandJpy * rate + (tariffCny ?? 0)) * 100) / 100
       : null;
   const grandCny =
     value.grand_total_cny != null ? num(value.grand_total_cny) : computedCny;
