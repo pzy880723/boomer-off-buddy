@@ -377,17 +377,17 @@ function JapanParcelList() {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="border-b bg-muted/30 hover:bg-muted/30">
                   <TableHead className="w-[36px]">
                     <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="全选" />
                   </TableHead>
-                  <TableHead className="w-[60px]">图</TableHead>
-                  <TableHead>订单 / 标题</TableHead>
-                  <TableHead className="text-center">子单</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead className="text-right">合计 ￥</TableHead>
-                  <TableHead>采购时间</TableHead>
-                  <TableHead className="w-[110px] text-right">操作</TableHead>
+                  <TableHead className="w-[64px] text-[11px] uppercase tracking-wider text-muted-foreground">图</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">订单 / 标题</TableHead>
+                  <TableHead className="w-[60px] text-center text-[11px] uppercase tracking-wider text-muted-foreground">子单</TableHead>
+                  <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">合计</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">采购时间</TableHead>
+                  <TableHead className="w-[110px] text-[11px] uppercase tracking-wider text-muted-foreground">状态</TableHead>
+                  <TableHead className="w-[160px] text-right text-[11px] uppercase tracking-wider text-muted-foreground">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
