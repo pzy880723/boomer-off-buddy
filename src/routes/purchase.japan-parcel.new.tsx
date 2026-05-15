@@ -24,7 +24,6 @@ import {
   formatJpy,
   formatCny,
   sumTariffJpy,
-  sumFreightDiffJpy,
   computeGrandTotal,
 } from "@/lib/japan-parcel.helpers";
 import { createJapanParcel, bulkCreateParcelItems } from "@/lib/japan-parcel.functions";
@@ -431,19 +430,17 @@ function NewParcelPage() {
   const totals = useMemo(() => {
     const itemsTotalJpy = items.reduce((s, it) => s + (Number(it.item_total_jpy) || 0), 0);
     const intlTotalJpy = Number(intl.intl_total_jpy) || 0;
-    const freightDiffJpy = sumFreightDiffJpy(items);
     const tariffJpy = sumTariffJpy(items);
     const rate = Number(intl.intl_exchange_rate) || 0;
     const { jpy: grandJpy, cny } = computeGrandTotal({
       itemsTotalJpy,
       intlTotalJpy,
-      freightDiffJpy,
       tariffJpy,
       exchangeRate: rate,
     });
     const grandCny = cny ?? 0;
     const tariffCny = rate > 0 ? Math.round((tariffJpy / rate) * 100) / 100 : 0;
-    return { itemsTotalJpy, intlTotalJpy, freightDiffJpy, tariffJpy, grandJpy, grandCny, tariffCny };
+    return { itemsTotalJpy, intlTotalJpy, tariffJpy, grandJpy, grandCny, tariffCny };
   }, [items, intl.intl_total_jpy, intl.intl_exchange_rate]);
 
   // ====== Save ======
@@ -696,12 +693,15 @@ function NewParcelPage() {
               <span className="font-mono">{formatJpy(totals.intlTotalJpy)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">+ 运费补差合计</span>
-              <span className="font-mono">{formatJpy(totals.freightDiffJpy)}</span>
-            </div>
-            <div className="flex justify-between">
               <span className="text-muted-foreground">+ 关税（按子订单类目税率）</span>
-              <span className="font-mono">{formatJpy(totals.tariffJpy)}</span>
+              <span className="font-mono">
+                {formatJpy(totals.tariffJpy)}
+                {totals.tariffCny > 0 && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    (≈ {formatCny(totals.tariffCny)})
+                  </span>
+                )}
+              </span>
             </div>
             <div className="mt-2 flex items-center justify-between border-t pt-2 text-base font-semibold">
               <span>= 合计</span>

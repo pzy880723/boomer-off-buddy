@@ -394,15 +394,10 @@ function JapanParcelList() {
                   const items = (r.japan_parcel_items ?? []) as ItemRow[];
                   const subCount = items.length;
                   const subSumJpy = items.reduce((s, it) => s + (Number(it.item_total_jpy) || 0), 0);
-                  const freightDiffSum = items.reduce(
-                    (s, it) => s + (Number((it as { freight_diff_jpy?: number | null }).freight_diff_jpy) || 0),
-                    0,
-                  );
                   const totalJpy =
                     Number(r.grand_total_jpy) ||
                     subSumJpy +
                       (Number(r.intl_total_jpy) || 0) +
-                      freightDiffSum +
                       (Number(r.tariff_jpy) || 0) ||
                     Number(r.total_jpy) ||
                     0;

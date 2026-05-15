@@ -24,7 +24,6 @@ import {
 import { classifyItemsTariff } from "@/lib/tariff.functions";
 import {
   PARCEL_STATUS_OPTIONS,
-  sumFreightDiffJpy,
   sumTariffJpy,
   computeItemTariffJpy,
 } from "@/lib/japan-parcel.helpers";
@@ -170,7 +169,6 @@ export function ParcelEditPanel({
 
   const items = (q.data?.items ?? []) as ItemRow[];
   const itemsTotalJpy = items.reduce((s, it) => s + (Number(it.item_total_jpy) || 0), 0);
-  const freightDiffJpy = sumFreightDiffJpy(items);
   const tariffJpy = sumTariffJpy(items);
   const timeline =
     (q.data?.row as { status_timeline?: { at?: string | null; text?: string | null }[] } | undefined)
@@ -370,7 +368,6 @@ export function ParcelEditPanel({
         onChange={setForm}
         itemsTotalJpy={itemsTotalJpy}
         itemsSlot={itemsSlot}
-        freightDiffJpy={freightDiffJpy}
         tariffJpy={tariffJpy}
       />
 

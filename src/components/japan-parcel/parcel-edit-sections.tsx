@@ -178,7 +178,6 @@ export function ParcelEditSections({
   onChange,
   itemsTotalJpy,
   itemsSlot,
-  freightDiffJpy = 0,
   tariffJpy = 0,
 }: {
   value: ParcelFormValue;
@@ -186,8 +185,6 @@ export function ParcelEditSections({
   itemsTotalJpy: number;
   /** 第三段（子订单列表 + 编辑/删除）由 ParcelEditPanel 注入，这里只负责排版 */
   itemsSlot: React.ReactNode;
-  /** Σ 子订单运费补差（JPY） */
-  freightDiffJpy?: number;
   /** Σ 子订单关税（JPY，按 tariff_rate 计算） */
   tariffJpy?: number;
 }) {
@@ -195,7 +192,7 @@ export function ParcelEditSections({
 
   const intlTotal = num(value.intl_total_jpy);
   const rate = num(value.intl_exchange_rate);
-  const suggestedJpy = itemsTotalJpy + intlTotal + freightDiffJpy + tariffJpy;
+  const suggestedJpy = itemsTotalJpy + intlTotal + tariffJpy;
   const suggestedCny = rate > 0 ? Math.round((suggestedJpy / rate) * 100) / 100 : null;
   const tariffCny = rate > 0 ? Math.round((tariffJpy / rate) * 100) / 100 : null;
 
@@ -237,7 +234,7 @@ export function ParcelEditSections({
         }
       >
         <FieldGrid fields={TOTAL_FIELDS} value={value} onChange={set} />
-        <div className="mt-3 grid grid-cols-2 gap-3 rounded-md bg-muted/30 p-3 text-xs sm:grid-cols-4">
+        <div className="mt-3 grid grid-cols-1 gap-3 rounded-md bg-muted/30 p-3 text-xs sm:grid-cols-3">
           <div>
             <div className="text-muted-foreground">商品总额</div>
             <div className="mt-0.5 font-mono">¥{itemsTotalJpy.toLocaleString()}</div>
@@ -247,12 +244,11 @@ export function ParcelEditSections({
             <div className="mt-0.5 font-mono">¥{intlTotal.toLocaleString()}</div>
           </div>
           <div>
-            <div className="text-muted-foreground">运费补差合计</div>
-            <div className="mt-0.5 font-mono">¥{freightDiffJpy.toLocaleString()}</div>
-          </div>
-          <div>
             <div className="text-muted-foreground">关税（按子订单税率）</div>
-            <div className="mt-0.5 font-mono">¥{tariffJpy.toLocaleString()}</div>
+            <div className="mt-0.5 font-mono">
+              ¥{tariffJpy.toLocaleString()}
+              {tariffCny != null ? ` ≈ ￥${tariffCny.toLocaleString()}` : ""}
+            </div>
           </div>
         </div>
       </Section>
@@ -265,20 +261,20 @@ export function ParcelOverviewSections({
   value,
   itemsTotalJpy,
   itemsSlot,
-  freightDiffJpy = 0,
   tariffJpy = 0,
 }: {
   value: ParcelFormValue;
   itemsTotalJpy: number;
   itemsSlot: React.ReactNode;
-  freightDiffJpy?: number;
   tariffJpy?: number;
 }) {
   const intlTotal = num(value.intl_total_jpy);
-  const computedJpy = itemsTotalJpy + intlTotal + freightDiffJpy + tariffJpy;
+  const rate = num(value.intl_exchange_rate);
+  const computedJpy = itemsTotalJpy + intlTotal + tariffJpy;
   const grandJpy =
     value.grand_total_jpy != null ? num(value.grand_total_jpy) : computedJpy;
   const grandCny = value.grand_total_cny != null ? num(value.grand_total_cny) : null;
+  const tariffCny = rate > 0 ? Math.round((tariffJpy / rate) * 100) / 100 : null;
 
   return (
     <div className="space-y-4">
@@ -308,7 +304,7 @@ export function ParcelOverviewSections({
       </Section>
 
       <Section title="④ 合计费用">
-        <div className="grid grid-cols-2 gap-3 rounded-md bg-muted/30 p-3 text-xs sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 rounded-md bg-muted/30 p-3 text-xs sm:grid-cols-3">
           <div>
             <div className="text-muted-foreground">商品总额</div>
             <div className="mt-0.5 font-mono">¥{itemsTotalJpy.toLocaleString()}</div>
@@ -318,12 +314,11 @@ export function ParcelOverviewSections({
             <div className="mt-0.5 font-mono">¥{intlTotal.toLocaleString()}</div>
           </div>
           <div>
-            <div className="text-muted-foreground">运费补差合计</div>
-            <div className="mt-0.5 font-mono">¥{freightDiffJpy.toLocaleString()}</div>
-          </div>
-          <div>
             <div className="text-muted-foreground">关税</div>
-            <div className="mt-0.5 font-mono">¥{tariffJpy.toLocaleString()}</div>
+            <div className="mt-0.5 font-mono">
+              ¥{tariffJpy.toLocaleString()}
+              {tariffCny != null ? ` ≈ ￥${tariffCny.toLocaleString()}` : ""}
+            </div>
           </div>
         </div>
         <div className="mt-3 flex items-baseline justify-end gap-2">
