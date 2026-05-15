@@ -122,6 +122,7 @@ function JapanParcelList() {
   const [sources, setSources] = useState<string[]>([]);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
+  const [currency] = useCurrencyDisplay();
   const debouncedSearch = useDebounced(search, 300);
 
   const list = useQuery({
