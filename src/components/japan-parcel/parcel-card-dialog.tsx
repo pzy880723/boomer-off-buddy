@@ -39,6 +39,8 @@ export interface ParcelCardItem {
   pay_method?: string | null;
   pay_at?: string | null;
   notes?: string | null;
+  tariff_category?: string | null;
+  tariff_rate?: number | null;
 }
 
 export interface ParcelCardData {

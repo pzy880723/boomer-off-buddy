@@ -520,6 +520,42 @@ function ItemEditForm({
         </div>
       </section>
       <section>
+        <h4 className="mb-2 text-xs font-semibold text-muted-foreground">④ 关税类目</h4>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs">类目（决定税率）</Label>
+            <Select
+              value={value.tariff_category ?? ""}
+              onValueChange={(v) => {
+                const cat = getTariffCategory(v);
+                onChange({
+                  ...value,
+                  tariff_category: v || null,
+                  tariff_rate: cat?.rate ?? null,
+                });
+              }}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="未识别" />
+              </SelectTrigger>
+              <SelectContent>
+                {TARIFF_CATEGORIES.map((c) => (
+                  <SelectItem key={c.key} value={c.key}>
+                    {c.label} · {Math.round(c.rate * 100)}%
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <ItemField
+            label="税率（自动）"
+            type="number"
+            value={value.tariff_rate}
+            onChange={(v) => set("tariff_rate", v as number | null)}
+          />
+        </div>
+      </section>
+      <section>
         <h4 className="mb-2 text-xs font-semibold text-muted-foreground">④ 支付与单号</h4>
         <div className="grid grid-cols-2 gap-3">
           <ItemField label="订单编号 sub_order_no" value={value.sub_order_no} onChange={(v) => set("sub_order_no", v as string | null)} />
