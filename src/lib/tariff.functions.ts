@@ -23,13 +23,14 @@ export const classifyItemsTariff = createServerFn({ method: "POST" })
         items: z
           .array(
             z.object({
-              id: z.string().uuid(),
+              id: z.string(),
               item_title: z.string().nullable().optional(),
               item_title_cn: z.string().nullable().optional(),
             }),
           )
           .min(1)
           .max(50),
+        persist: z.boolean().optional(),
       })
       .parse(input),
   )
