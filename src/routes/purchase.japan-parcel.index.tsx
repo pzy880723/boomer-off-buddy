@@ -266,22 +266,14 @@ function JapanParcelList() {
     <div>
       <PageHeader
         title="日本小包裹"
-        description="截图批量导入 · AI 识图 · 手动录入 · 状态人工维护"
+        description="AI 识图 · 手动录入 · 状态人工维护"
         actions={
-          <>
-            <Button asChild size="sm" className="bg-gradient-brand hover:opacity-90">
-              <Link to="/purchase/japan-parcel/import">
-                <Upload className="mr-1.5 h-3.5 w-3.5" />
-                截图批量导入
-              </Link>
-            </Button>
-            <Button asChild size="sm" className="bg-gradient-brand hover:opacity-90">
-              <Link to="/purchase/japan-parcel/new">
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                新建包裹
-              </Link>
-            </Button>
-          </>
+          <Button asChild size="sm" className="bg-gradient-brand hover:opacity-90">
+            <Link to="/purchase/japan-parcel/new">
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              新建包裹
+            </Link>
+          </Button>
         }
       />
 
