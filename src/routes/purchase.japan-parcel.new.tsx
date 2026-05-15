@@ -696,9 +696,11 @@ function NewParcelPage() {
               <span className="font-mono">{formatJpy(totals.intlTotalJpy)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">
-                + 关税（{(TARIFF_RATE * 100).toFixed(0)}%，可后续配置）
-              </span>
+              <span className="text-muted-foreground">+ 运费补差合计</span>
+              <span className="font-mono">{formatJpy(totals.freightDiffJpy)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">+ 关税（按子订单类目税率）</span>
               <span className="font-mono">{formatJpy(totals.tariffJpy)}</span>
             </div>
             <div className="mt-2 flex items-center justify-between border-t pt-2 text-base font-semibold">
