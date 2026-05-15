@@ -37,7 +37,6 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import {
-  PARCEL_SOURCE_LABEL,
   simplifyStatus,
   SIMPLE_STATUS_LABEL,
   getDisplayTitle,
@@ -54,7 +53,10 @@ import { useDebounced } from "@/hooks/use-debounced";
 import type { ParcelCardData, ParcelCardItem } from "@/components/japan-parcel/parcel-card-dialog";
 import { ItemsHoverPreview } from "@/components/japan-parcel/items-hover-preview";
 import { CurrencyToggle } from "@/components/japan-parcel/currency-toggle";
+import { ViewModeToggle } from "@/components/japan-parcel/view-mode-toggle";
 import { useCurrencyDisplay } from "@/hooks/use-currency-display";
+import { useParcelViewMode } from "@/hooks/use-parcel-view-mode";
+import { cn } from "@/lib/utils";
 
 const ParcelCardDialog = lazy(() =>
   import("@/components/japan-parcel/parcel-card-dialog").then((m) => ({
