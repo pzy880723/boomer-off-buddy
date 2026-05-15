@@ -238,7 +238,7 @@ export function ParcelEditSections({
         }
       >
         <FieldGrid fields={TOTAL_FIELDS} value={value} onChange={set} />
-        <div className="mt-3 grid grid-cols-1 gap-3 rounded-md bg-muted/30 p-3 text-xs sm:grid-cols-3">
+        <div className="mt-3 grid grid-cols-1 gap-3 rounded-md bg-muted/30 p-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <div className="text-muted-foreground">商品总额</div>
             <div className="mt-0.5 font-mono">¥{itemsTotalJpy.toLocaleString()}</div>
@@ -248,10 +248,16 @@ export function ParcelEditSections({
             <div className="mt-0.5 font-mono">¥{intlTotal.toLocaleString()}</div>
           </div>
           <div>
-            <div className="text-muted-foreground">关税（按子订单税率）</div>
+            <div className="text-muted-foreground">日本侧合计 (JPY)</div>
+            <div className="mt-0.5 font-mono">¥{suggestedJpy.toLocaleString()}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">关税（按子订单税率，付人民币）</div>
             <div className="mt-0.5 font-mono">
-              ¥{tariffJpy.toLocaleString()}
-              {tariffCny != null ? ` ≈ ￥${tariffCny.toLocaleString()}` : ""}
+              {tariffCny != null ? `￥${tariffCny.toLocaleString()}` : "—"}
+              <span className="ml-1 text-[10px] text-muted-foreground">
+                (¥{tariffJpy.toLocaleString()})
+              </span>
             </div>
           </div>
         </div>
