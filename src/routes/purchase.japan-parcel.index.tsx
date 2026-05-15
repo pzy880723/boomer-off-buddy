@@ -101,6 +101,7 @@ type ParcelRow = ParcelCardData & {
   item_title_cn: string | null;
   item_image_url: string | null;
   total_jpy: number | null;
+  tariff_cny?: number | null;
   japan_parcel_items?: ItemRow[];
 };
 
