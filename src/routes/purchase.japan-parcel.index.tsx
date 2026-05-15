@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Plus,
@@ -47,16 +47,16 @@ import {
   updateJapanParcel,
   deleteJapanParcel,
   bulkDeleteJapanParcels,
-  bulkSetItemTitlesCn,
 } from "@/lib/japan-parcel.functions";
-import { translateTitles } from "@/lib/translate.functions";
 import { useDebounced } from "@/hooks/use-debounced";
-import {
-  ParcelCardDialog,
-  type ParcelCardData,
-  type ParcelCardItem,
-} from "@/components/japan-parcel/parcel-card-dialog";
+import type { ParcelCardData, ParcelCardItem } from "@/components/japan-parcel/parcel-card-dialog";
 import { ItemsHoverPreview } from "@/components/japan-parcel/items-hover-preview";
+
+const ParcelCardDialog = lazy(() =>
+  import("@/components/japan-parcel/parcel-card-dialog").then((m) => ({
+    default: m.ParcelCardDialog,
+  })),
+);
 
 const buildListKey = (search: string, sources: string[]) =>
   ["jp-parcels", { search, sources }] as const;
@@ -78,7 +78,6 @@ export const Route = createFileRoute("/purchase/japan-parcel/")({
       { name: "description", content: "Meruki / Yahoo / Mercari 小包裹订单管理" },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(listOptions("", [])),
   component: JapanParcelList,
 });
 
@@ -105,16 +104,15 @@ type ParcelRow = ParcelCardData & {
   japan_parcel_items?: ItemRow[];
 };
 
+type ListData = { rows: ParcelRow[] };
+
 function JapanParcelList() {
   const qc = useQueryClient();
   const router = useRouter();
-  const fetchList = useServerFn(listJapanParcels);
   const updateStatus = useServerFn(updateJapanParcelStatus);
   const updateParcel = useServerFn(updateJapanParcel);
   const delOne = useServerFn(deleteJapanParcel);
   const delMany = useServerFn(bulkDeleteJapanParcels);
-  const fnTranslate = useServerFn(translateTitles);
-  const fnSaveTitles = useServerFn(bulkSetItemTitlesCn);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -124,11 +122,10 @@ function JapanParcelList() {
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
   const debouncedSearch = useDebounced(search, 300);
 
-  
-
-  const list = useSuspenseQuery(listOptions(debouncedSearch, sources));
-
-  type ListData = Awaited<ReturnType<typeof fetchList>>;
+  const list = useQuery({
+    ...listOptions(debouncedSearch, sources),
+    placeholderData: (previousData) => previousData,
+  });
 
   const allRows = (list.data?.rows ?? []) as unknown as ParcelRow[];
   // 客户端按简化状态筛选
@@ -139,59 +136,6 @@ function JapanParcelList() {
         : allRows,
     [allRows, statusFilter],
   );
-
-  // ===== 懒翻译：列表加载后，自动给前 20 条「第一个子订单缺中文标题」补翻 =====
-  const translatedOnce = useRef(false);
-  useEffect(() => {
-    if (translatedOnce.current || allRows.length === 0) return;
-    translatedOnce.current = true;
-    const need: { id: string; jp: string }[] = [];
-    for (const r of allRows) {
-      const items = r.japan_parcel_items ?? [];
-      for (const it of items) {
-        if (!it.item_title_cn && it.item_title) {
-          need.push({ id: it.id, jp: it.item_title });
-          if (need.length >= 20) break;
-        }
-      }
-      if (need.length >= 20) break;
-    }
-    if (need.length === 0) return;
-    const run = async () => {
-      try {
-        const r = await fnTranslate({ data: { titles: need.map((n) => n.jp) } });
-        if (!r.ok) return;
-        const updates = need
-          .map((n, i) => ({ id: n.id, item_title_cn: r.translations[i] }))
-          .filter((u): u is { id: string; item_title_cn: string } => !!u.item_title_cn);
-        if (updates.length === 0) return;
-        await fnSaveTitles({ data: { updates } });
-        const map = new Map(updates.map((u) => [u.id, u.item_title_cn]));
-        qc.setQueriesData<ListData>({ queryKey: ["jp-parcels"] }, (data) => {
-          if (!data) return data;
-          return {
-            ...data,
-            rows: data.rows.map((row) => ({
-              ...row,
-              japan_parcel_items: (row.japan_parcel_items ?? []).map((it) =>
-                map.has(it.id) ? { ...it, item_title_cn: map.get(it.id)! } : it,
-              ),
-            })),
-          } as ListData;
-        });
-      } catch {
-        /* silent */
-      }
-    };
-    // 等首屏渲染完再发翻译请求，避免抢占数据加载
-    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-    const cic = (window as unknown as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback;
-    const handle = ric ? ric(() => void run(), { timeout: 2000 }) : window.setTimeout(() => void run(), 800);
-    return () => {
-      if (ric && cic) cic(handle);
-      else window.clearTimeout(handle);
-    };
-  }, [allRows, fnTranslate, fnSaveTitles, qc]);
 
   const statusMut = useMutation({
     mutationFn: async (v: { id: string; status: SimpleStatus }) => {
@@ -366,7 +310,9 @@ function JapanParcelList() {
 
       <Card>
         <CardContent className="p-0">
-          {rows.length === 0 ? (
+          {list.isLoading && rows.length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">正在加载小包裹列表…</div>
+          ) : rows.length === 0 ? (
             <EmptyState
               title="暂无小包裹订单"
               description="可以单条 AI 识图，或手动新建。"
@@ -414,6 +360,7 @@ function JapanParcelList() {
                       data-state={selected.has(r.id) ? "selected" : undefined}
                       className="group cursor-pointer transition-colors hover:bg-muted/40"
                       onClick={() => {
+                        void import("@/components/japan-parcel/parcel-card-dialog");
                         setOpenTab("overview");
                         setOpenCardId(r.id);
                       }}
@@ -434,6 +381,7 @@ function JapanParcelList() {
                             item_image_url: it.item_image_url,
                           }))}
                           onClick={() => {
+                            void import("@/components/japan-parcel/parcel-card-dialog");
                             setOpenTab("overview");
                             setOpenCardId(r.id);
                           }}
@@ -523,6 +471,7 @@ function JapanParcelList() {
                             aria-label="编辑"
                             title="编辑"
                             onClick={() => {
+                              void import("@/components/japan-parcel/parcel-card-dialog");
                               setOpenTab("edit");
                               setOpenCardId(r.id);
                             }}
@@ -553,13 +502,17 @@ function JapanParcelList() {
         </CardContent>
       </Card>
 
-      <ParcelCardDialog
-        open={!!openCardId}
-        onOpenChange={(o) => !o && setOpenCardId(null)}
-        parcel={openParcel}
-        items={(openParcel?.japan_parcel_items ?? []) as ParcelCardItem[]}
-        defaultTab={openTab}
-      />
+      {openCardId && (
+        <Suspense fallback={null}>
+          <ParcelCardDialog
+            open={!!openCardId}
+            onOpenChange={(o) => !o && setOpenCardId(null)}
+            parcel={openParcel}
+            items={(openParcel?.japan_parcel_items ?? []) as ParcelCardItem[]}
+            defaultTab={openTab}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

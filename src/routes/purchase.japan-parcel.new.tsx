@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Save, Plus, X } from "lucide-react";
@@ -25,13 +25,18 @@ import {
   computeGrandTotal,
 } from "@/lib/japan-parcel.helpers";
 import { createJapanParcel, bulkCreateParcelItems } from "@/lib/japan-parcel.functions";
-import { ItemImageUploader } from "@/components/japan-parcel/item-image-uploader";
 import type { RecognizedResult } from "@/components/japan-parcel/smart-recognize-panel";
 
 // Lazy-load the heavy AI recognition panel — keeps initial route chunk small
 const SmartRecognizePanel = lazy(() =>
   import("@/components/japan-parcel/smart-recognize-panel").then((m) => ({
     default: m.SmartRecognizePanel,
+  })),
+);
+
+const ItemImageUploader = lazy(() =>
+  import("@/components/japan-parcel/item-image-uploader").then((m) => ({
+    default: m.ItemImageUploader,
   })),
 );
 
@@ -283,8 +288,10 @@ function NewParcelPage() {
         description="智能填充 + 三段式表单，一次保存包裹与所有子订单"
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={() => nav({ to: "/purchase/japan-parcel" })}>
-              <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> 返回
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/purchase/japan-parcel" preload="intent">
+                <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> 返回
+              </Link>
             </Button>
             <Button
               size="sm"
@@ -432,10 +439,12 @@ function NewParcelPage() {
                     </Button>
                   </div>
                   <div className="flex gap-3">
-                    <ItemImageUploader
-                      value={it.item_image_url}
-                      onChange={(url) => updateItem(it._key, { item_image_url: url })}
-                    />
+                    <Suspense fallback={<div className="h-28 w-28 flex-shrink-0 rounded-md border border-dashed bg-muted/30" />}>
+                      <ItemImageUploader
+                        value={it.item_image_url}
+                        onChange={(url) => updateItem(it._key, { item_image_url: url })}
+                      />
+                    </Suspense>
                     <div className="grid flex-1 gap-3 md:grid-cols-3">
                       <F label="商品标题（日）" value={it.item_title} onChange={(v) => updateItem(it._key, { item_title: v as Str })} />
                       <F label="商品标题（中）" value={it.item_title_cn} onChange={(v) => updateItem(it._key, { item_title_cn: v as Str })} />

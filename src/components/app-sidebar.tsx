@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Package,
@@ -17,6 +17,7 @@ import {
   Users,
   Link2,
   Activity,
+  type LucideIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -33,7 +34,22 @@ import {
 } from "@/components/ui/sidebar";
 import logo from "@/assets/logo-boomeroff.png";
 
-const groups = [
+type NavTo =
+  | "/dashboard"
+  | "/purchase/japan-bulk"
+  | "/purchase/japan-parcel"
+  | "/purchase/domestic"
+  | "/purchase/logistics"
+  | "/inventory/products"
+  | "/inventory/batches"
+  | "/inventory/transfers"
+  | "/stores/list"
+  | "/stores/franchisees"
+  | "/stores/youzan"
+  | "/knowledge"
+  | "/settings";
+
+const groups: { label: string; items: { title: string; url: NavTo; icon: LucideIcon }[]; icon?: LucideIcon }[] = [
   {
     label: "总览",
     items: [{ title: "仪表盘", url: "/dashboard", icon: LayoutDashboard }],
@@ -76,15 +92,17 @@ const groups = [
 ];
 
 export function AppSidebar() {
+  const router = useRouter();
   const currentPath = useRouterState({ select: (s) => s.location.pathname });
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const isActive = (path: string) => currentPath === path || currentPath.startsWith(path + "/");
+  const preload = (to: NavTo) => void router.preloadRoute({ to });
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="border-b border-sidebar-border">
-        <Link to="/dashboard" className="flex items-center gap-3 px-1 py-2">
+        <Link to="/dashboard" preload="intent" onPointerDown={() => preload("/dashboard")} className="flex items-center gap-3 px-1 py-2">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white p-1.5 shadow-sm">
             <img src={logo} alt="BOOMER OFF" className="h-full w-full object-contain" />
           </div>
@@ -119,7 +137,13 @@ export function AppSidebar() {
                         tooltip={item.title}
                         className="relative h-9 data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-medium hover:bg-sidebar-accent/50"
                       >
-                        <Link to={item.url} className="flex items-center gap-2.5">
+                        <Link
+                          to={item.url}
+                          preload="intent"
+                          onMouseEnter={() => preload(item.url)}
+                          onPointerDown={() => preload(item.url)}
+                          className="flex items-center gap-2.5"
+                        >
                           {active && (
                             <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
                           )}
