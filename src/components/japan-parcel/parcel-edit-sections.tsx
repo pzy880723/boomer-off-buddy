@@ -178,21 +178,26 @@ export function ParcelEditSections({
   onChange,
   itemsTotalJpy,
   itemsSlot,
+  freightDiffJpy = 0,
+  tariffJpy = 0,
 }: {
   value: ParcelFormValue;
   onChange: (v: ParcelFormValue) => void;
   itemsTotalJpy: number;
   /** 第三段（子订单列表 + 编辑/删除）由 ParcelEditPanel 注入，这里只负责排版 */
   itemsSlot: React.ReactNode;
+  /** Σ 子订单运费补差（JPY） */
+  freightDiffJpy?: number;
+  /** Σ 子订单关税（JPY，按 tariff_rate 计算） */
+  tariffJpy?: number;
 }) {
   const set = (k: string, v: string | number | null) => onChange({ ...value, [k]: v });
 
-  // 自动算合计建议值：商品总额 + 国际物流小计 + 关税
   const intlTotal = num(value.intl_total_jpy);
-  const tariff = num(value.tariff_jpy);
-  const suggestedJpy = itemsTotalJpy + intlTotal + tariff;
   const rate = num(value.intl_exchange_rate);
+  const suggestedJpy = itemsTotalJpy + intlTotal + freightDiffJpy + tariffJpy;
   const suggestedCny = rate > 0 ? Math.round((suggestedJpy / rate) * 100) / 100 : null;
+  const tariffCny = rate > 0 ? Math.round((tariffJpy / rate) * 100) / 100 : null;
 
   return (
     <div className="space-y-4">
