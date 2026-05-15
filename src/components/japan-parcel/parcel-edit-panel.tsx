@@ -2,10 +2,17 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Save, Trash2 } from "lucide-react";
+import { Save, Trash2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   deleteJapanParcel,
   deleteParcelItem,
@@ -14,7 +21,14 @@ import {
   updateJapanParcelStatus,
   updateParcelItem,
 } from "@/lib/japan-parcel.functions";
-import { PARCEL_STATUS_OPTIONS } from "@/lib/japan-parcel.helpers";
+import { classifyItemsTariff } from "@/lib/tariff.functions";
+import {
+  PARCEL_STATUS_OPTIONS,
+  sumFreightDiffJpy,
+  sumTariffJpy,
+  computeItemTariffJpy,
+} from "@/lib/japan-parcel.helpers";
+import { TARIFF_CATEGORIES, tariffCategoryLabel, rateToPercent, getTariffCategory } from "@/lib/tariff";
 import {
   Dialog,
   DialogContent,
