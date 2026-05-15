@@ -1,12 +1,41 @@
+## 问题
+
+`useParcelViewMode` 用 `useSyncExternalStore` + 服务端 snapshot 总是返回 `"parcel"`，SSR 渲染后客户端再"水合"切回 localStorage 值。在 TanStack Start 的 SSR 流程下，这会导致首屏始终是 parcel，且某些情况下 hydration 后没有正确更新到 stored 值。
+
 ## 改动
 
-仅改 `src/components/japan-parcel/item-image-uploader.tsx`：
+仅改 `src/hooks/use-parcel-view-mode.ts`，简化为 useState + useEffect 模式：
 
-1. **移除框的 click 触发文件选择**：删 `onClick={() => inputRef.current?.click()}` 和 `onKeyDown` 中的 click 触发，框改为"focus 后接受 Ctrl+V 粘贴 / 拖拽"二合一。
-2. **保留**：focus、粘贴监听、拖拽、删除按钮。
-3. **框内文案**改为"点此 → Ctrl+V 粘贴 / 拖拽到此"。
-4. **下方新增"上传图片"按钮**：调用现有 `inputRef.current?.click()` 打开文件选择器。
+```ts
+const KEY = "jp-parcel-view-mode";
+const DEFAULT: ParcelViewMode = "parcel";
 
-布局调整：原本在 `purchase.japan-parcel.new.tsx` 中只放 `<ItemImageUploader />`，现在组件自身改为竖向布局（框 + 按钮）。`ItemImageUploaderCompact` 同样保留按钮（已有）。
+export function useParcelViewMode(): [ParcelViewMode, (v: ParcelViewMode) => void] {
+  const [value, setValue] = useState<ParcelViewMode>(DEFAULT);
 
-不动数据/上传逻辑。
+  // 客户端挂载后从 localStorage 读初值
+  useEffect(() => {
+    const v = window.localStorage.getItem(KEY);
+    if (v === "parcel" || v === "item") setValue(v);
+    // 跨标签同步
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === KEY && (e.newValue === "parcel" || e.newValue === "item")) {
+        setValue(e.newValue);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const set = useCallback((v: ParcelViewMode) => {
+    setValue(v);
+    if (typeof window !== "undefined") window.localStorage.setItem(KEY, v);
+  }, []);
+
+  return [value, set];
+}
+```
+
+效果：切换商品维度后写 localStorage，刷新页面 useEffect 再次读到并恢复，直到再次切换。
+
+`view-mode-toggle.tsx` 和 `index.tsx` 调用方式不变。
