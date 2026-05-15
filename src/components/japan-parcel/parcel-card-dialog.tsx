@@ -13,7 +13,6 @@ import { ImageOff } from "lucide-react";
 import {
   simplifyStatus,
   SIMPLE_STATUS_LABEL,
-  sumFreightDiffJpy,
   sumTariffJpy,
   computeItemTariffJpy,
 } from "@/lib/japan-parcel.helpers";
