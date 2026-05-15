@@ -418,6 +418,41 @@ function NewParcelPage() {
         }
       }
 
+      // ===== Step 5: 自动关税分类（不写库，结果回填到本地 items） =====
+      const classifyInput = validItems
+        .map((it, idx) => ({
+          id: `idx-${idx}`,
+          item_title: (it.item_title as string | null) ?? null,
+          item_title_cn: (it.item_title_cn as string | null) ?? null,
+        }))
+        .filter((x) => x.item_title || x.item_title_cn);
+      if (classifyInput.length) {
+        upsertStep({ id: "tariff", label: "关税分类", status: "running", detail: `${classifyInput.length} 条` });
+        const t0 = Date.now();
+        try {
+          const cl = await fnClassify({ data: { items: classifyInput, persist: false } });
+          const map = new Map<string, { category: string; rate: number }>();
+          for (const r of cl.results) {
+            const cat = TARIFF_CATEGORIES.find((c) => c.key === r.category);
+            if (cat) map.set(r.id, { category: cat.key, rate: cat.rate });
+          }
+          setItems((arr) => {
+            const next = arr.slice();
+            classifyInput.forEach((x) => {
+              const idx = Number(x.id.replace("idx-", ""));
+              const m = map.get(x.id);
+              if (m && next[idx]) {
+                next[idx] = { ...next[idx], tariff_category: m.category, tariff_rate: m.rate };
+              }
+            });
+            return next;
+          });
+          upsertStep({ id: "tariff", label: "关税分类", status: "done", detail: `${cl.results.length} 条 · ${((Date.now() - t0) / 1000).toFixed(1)}s`, durationMs: Date.now() - t0 });
+        } catch (e) {
+          upsertStep({ id: "tariff", label: "关税分类", status: "warn", errorMsg: (e as Error).message });
+        }
+      }
+
       upsertStep({
         id: "done",
         label: "完成",
