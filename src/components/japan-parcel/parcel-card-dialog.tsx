@@ -174,6 +174,8 @@ function OverviewItems({ items }: { items: ParcelCardItem[] }) {
             <img
               src={it.item_image_url}
               alt=""
+              loading="lazy"
+              decoding="async"
               className="h-20 w-20 flex-shrink-0 rounded object-cover"
             />
           ) : (

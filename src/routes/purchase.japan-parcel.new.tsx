@@ -490,7 +490,7 @@ function NewParcelPage() {
     setItems((arr) => arr.map((it) => (it._key === key ? { ...it, ...patch } : it)));
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-10">
       <PageHeader
         title="新建小包裹订单"
         description="智能填充 + 三段式表单，一次保存包裹与所有子订单"
@@ -512,217 +512,239 @@ function NewParcelPage() {
         }
       />
 
-      {/* Smart fill */}
-      <Card className="border-primary/30">
-        <CardHeader className="py-3">
-          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-            <Sparkles className="h-4 w-4 text-primary" />
-            智能填写（粘贴页面文字 或 截图，一键识别）
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={smartTab} onValueChange={(v) => setSmartTab(v as "text" | "image")}>
-            <TabsList>
-              <TabsTrigger value="text">
-                <Type className="mr-1.5 h-3.5 w-3.5" /> 粘贴文字
-              </TabsTrigger>
-              <TabsTrigger value="image">
-                <ImageIcon className="mr-1.5 h-3.5 w-3.5" /> 粘贴截图
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="text" className="mt-3">
-              <Textarea
-                rows={6}
-                placeholder="将网页上的订单/物流费用/商品信息整段复制粘贴到这里…"
-                value={smartText}
-                onChange={(e) => setSmartText(e.target.value)}
-              />
-            </TabsContent>
-            <TabsContent value="image" className="mt-3">
-              <ScreenshotDropzone
-                preview={smartImage}
-                onImage={(dataUrl) => setSmartImage(dataUrl)}
-              />
-            </TabsContent>
-          </Tabs>
-          <div className="mt-3 flex justify-end">
-            <Button
-              size="sm"
-              className="bg-gradient-brand hover:opacity-90"
-              disabled={
-                running || (smartTab === "text" ? !smartText.trim() : !smartImage)
-              }
-              onClick={runPipeline}
-            >
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              {running ? "识别中…" : "一键识别并填充"}
-            </Button>
-          </div>
-
-          {tlSteps.length > 0 && (
-            <div className="mt-3">
-              <RecognizeTimeline steps={tlSteps} />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 1. 订单信息 */}
-      <Card>
-        <CardHeader className="py-3">
-          <CardTitle className="text-sm font-semibold">① 订单信息</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-3">
-          <F label="订单号" value={parcel.source_order_no} onChange={(v) => setParcel({ ...parcel, source_order_no: v as Str })} />
-          <F label="国际物流单号" value={parcel.tracking_no} onChange={(v) => setParcel({ ...parcel, tracking_no: v as Str })} />
-          <div className="grid gap-1">
-            <Label className="text-xs text-muted-foreground">状态</Label>
-            <Select value={parcel.status} onValueChange={(v) => setParcel({ ...parcel, status: v })}>
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PARCEL_STATUS_OPTIONS.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <F label="重量（含包装，g）" type="number" value={parcel.total_weight_g} onChange={(v) => setParcel({ ...parcel, total_weight_g: v as Num })} />
-          <F label="体积 (cm³)" type="number" value={parcel.volume_cm3} onChange={(v) => setParcel({ ...parcel, volume_cm3: v as Num })} />
-          <F label="最大边长 (cm)" type="number" value={parcel.max_side_cm} onChange={(v) => setParcel({ ...parcel, max_side_cm: v as Num })} />
-          <F label="存储天数" type="number" value={parcel.storage_days} onChange={(v) => setParcel({ ...parcel, storage_days: v as Num })} />
-          <F label="状态文字（原始）" value={parcel.status_text} onChange={(v) => setParcel({ ...parcel, status_text: v as Str })} />
-          <div />
-          <F label="收货人" value={parcel.receiver_name} onChange={(v) => setParcel({ ...parcel, receiver_name: v as Str })} />
-          <F label="电话" value={parcel.receiver_phone} onChange={(v) => setParcel({ ...parcel, receiver_phone: v as Str })} />
-          <div className="md:col-span-3">
-            <Label className="text-xs text-muted-foreground">收货地址</Label>
-            <Textarea
-              rows={2}
-              value={parcel.receiver_address ?? ""}
-              onChange={(e) => setParcel({ ...parcel, receiver_address: e.target.value || null })}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 2. 国际物流费用明细 */}
-      <Card>
-        <CardHeader className="py-3">
-          <CardTitle className="text-sm font-semibold">② 国际物流费用明细</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-3">
-          <F label="国际物流总计（JPY）" type="number" value={intl.intl_total_jpy} onChange={(v) => setIntl({ ...intl, intl_total_jpy: v as Num })} />
-          <F label="结算汇率（1 JPY = ? CNY）" type="number" value={intl.intl_exchange_rate} onChange={(v) => setIntl({ ...intl, intl_exchange_rate: v as Num })} placeholder="如 0.0481" />
-          <F label="商户订单号" value={intl.intl_merchant_order_no} onChange={(v) => setIntl({ ...intl, intl_merchant_order_no: v as Str })} />
-          <F label="支付方式" value={intl.intl_pay_method} onChange={(v) => setIntl({ ...intl, intl_pay_method: v as Str })} />
-          <F label="支付时间" type="datetime" value={intl.intl_pay_at} onChange={(v) => setIntl({ ...intl, intl_pay_at: v as Str })} />
-          <F label="国际物流费（JPY）" type="number" value={intl.intl_freight_jpy} onChange={(v) => setIntl({ ...intl, intl_freight_jpy: v as Num })} />
-          <F label="发送方式" value={intl.intl_ship_method} onChange={(v) => setIntl({ ...intl, intl_ship_method: v as Str })} placeholder="日本邮政 海运件" />
-          <F label="收费方式" value={intl.intl_charge_method} onChange={(v) => setIntl({ ...intl, intl_charge_method: v as Str })} placeholder="按重量收费 18,500g" />
-          <F label="保留原始包装（JPY）" type="number" value={intl.intl_keep_packaging_jpy} onChange={(v) => setIntl({ ...intl, intl_keep_packaging_jpy: v as Num })} />
-          <F label="强化加固（JPY）" type="number" value={intl.intl_reinforce_jpy} onChange={(v) => setIntl({ ...intl, intl_reinforce_jpy: v as Num })} />
-          <F label="发送手续费（JPY）" type="number" value={intl.intl_send_fee_jpy} onChange={(v) => setIntl({ ...intl, intl_send_fee_jpy: v as Num })} />
-          <F label="拍照费（JPY）" type="number" value={intl.intl_photo_fee_jpy} onChange={(v) => setIntl({ ...intl, intl_photo_fee_jpy: v as Num })} />
-          <F label="合单手续费（JPY）" type="number" value={intl.intl_merge_fee_jpy} onChange={(v) => setIntl({ ...intl, intl_merge_fee_jpy: v as Num })} />
-          <F label="已使用积分" type="number" value={intl.intl_points_used} onChange={(v) => setIntl({ ...intl, intl_points_used: v as Num })} />
-        </CardContent>
-      </Card>
-
-      {/* 3. 子订单 */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between py-3">
-          <CardTitle className="text-sm font-semibold">
-            ③ 子订单 / 包裹内物品（{items.length} 件）
-          </CardTitle>
-          <Button size="sm" variant="outline" onClick={() => setItems([...items, emptyItem()])}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> 新增子订单
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {items.map((it, idx) => (
-            <div key={it._key} className="rounded-lg border bg-muted/30 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm font-medium">子订单 #{idx + 1}</div>
+      <div className="grid gap-5 lg:grid-cols-12">
+        {/* === Left main column === */}
+        <div className="space-y-5 lg:col-span-8">
+          {/* Smart fill */}
+          <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent shadow-card">
+            <CardHeader className="py-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                <Sparkles className="h-4 w-4 text-primary" />
+                智能填写（粘贴页面文字 或 截图，一键识别）
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Tabs value={smartTab} onValueChange={(v) => setSmartTab(v as "text" | "image")}>
+                <TabsList>
+                  <TabsTrigger value="text">
+                    <Type className="mr-1.5 h-3.5 w-3.5" /> 粘贴文字
+                  </TabsTrigger>
+                  <TabsTrigger value="image">
+                    <ImageIcon className="mr-1.5 h-3.5 w-3.5" /> 粘贴截图
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="text" className="mt-3">
+                  <Textarea
+                    rows={6}
+                    placeholder="将网页上的订单/物流费用/商品信息整段复制粘贴到这里…"
+                    value={smartText}
+                    onChange={(e) => setSmartText(e.target.value)}
+                  />
+                </TabsContent>
+                <TabsContent value="image" className="mt-3">
+                  <ScreenshotDropzone
+                    preview={smartImage}
+                    onImage={(dataUrl) => setSmartImage(dataUrl)}
+                  />
+                </TabsContent>
+              </Tabs>
+              <div className="mt-3 flex justify-end">
                 <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 text-destructive"
-                  onClick={() => setItems((arr) => arr.filter((x) => x._key !== it._key))}
-                  disabled={items.length === 1}
-                  aria-label="删除"
+                  size="sm"
+                  className="bg-gradient-brand hover:opacity-90"
+                  disabled={
+                    running || (smartTab === "text" ? !smartText.trim() : !smartImage)
+                  }
+                  onClick={runPipeline}
                 >
-                  <X className="h-4 w-4" />
+                  <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                  {running ? "识别中…" : "一键识别并填充"}
                 </Button>
               </div>
-              <div className="flex gap-3">
-                <ItemImageUploader
-                  value={it.item_image_url}
-                  onChange={(url) => updateItem(it._key, { item_image_url: url })}
-                />
-                <div className="grid flex-1 gap-3 md:grid-cols-3">
-                  <F label="商品标题（日）" value={it.item_title} onChange={(v) => updateItem(it._key, { item_title: v as Str })} />
-                  <F label="商品标题（中）" value={it.item_title_cn} onChange={(v) => updateItem(it._key, { item_title_cn: v as Str })} />
-                  <F label="商品费用 JPY" type="number" value={it.item_total_jpy} onChange={(v) => updateItem(it._key, { item_total_jpy: v as Num })} />
-                <F label="≈ CNY" type="number" value={it.item_total_cny} onChange={(v) => updateItem(it._key, { item_total_cny: v as Num })} />
-                <F label="结算汇率" type="number" value={it.exchange_rate} onChange={(v) => updateItem(it._key, { exchange_rate: v as Num })} />
-                <F label="订单编号" value={it.sub_order_no} onChange={(v) => updateItem(it._key, { sub_order_no: v as Str })} />
-                <F label="商户订单号" value={it.merchant_order_no} onChange={(v) => updateItem(it._key, { merchant_order_no: v as Str })} />
-                <F label="入库重量（g）" type="number" value={it.weight_g} onChange={(v) => updateItem(it._key, { weight_g: v as Num })} />
-                <F label="商品价格（JPY）" type="number" value={it.unit_price_jpy} onChange={(v) => updateItem(it._key, { unit_price_jpy: v as Num })} />
-                <F label="数量" type="number" value={it.quantity} onChange={(v) => updateItem(it._key, { quantity: v as Num })} />
-                <F label="手续费（JPY）" type="number" value={it.service_fee_jpy} onChange={(v) => updateItem(it._key, { service_fee_jpy: v as Num })} />
-                <F label="日本国内运费（JPY）" type="number" value={it.domestic_freight_jpy} onChange={(v) => updateItem(it._key, { domestic_freight_jpy: v as Num })} />
-                <F label="运费补差（JPY）" type="number" value={it.freight_diff_jpy} onChange={(v) => updateItem(it._key, { freight_diff_jpy: v as Num })} />
-                <F label="支付方式" value={it.pay_method} onChange={(v) => updateItem(it._key, { pay_method: v as Str })} />
-                <F label="支付时间" type="datetime" value={it.pay_at} onChange={(v) => updateItem(it._key, { pay_at: v as Str })} />
-                </div>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
 
-      {/* Totals */}
-      <Card className="border-primary/40 bg-gradient-to-br from-primary/5 to-transparent">
-        <CardHeader className="py-3">
-          <CardTitle className="text-sm font-semibold">合计</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">商品总额（{items.length} 件）</span>
-              <span className="font-mono">{formatJpy(totals.itemsTotalJpy)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">+ 国际物流费</span>
-              <span className="font-mono">{formatJpy(totals.intlTotalJpy)}</span>
-            </div>
-            <div className="flex justify-between border-t pt-2 font-medium">
-              <span>= 日本侧合计 (JPY)</span>
-              <span className="font-mono">{formatJpy(totals.grandJpy)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">
-                + 关税（按子订单类目税率，国内付人民币）
-              </span>
-              <span className="font-mono">
-                {totals.tariffCny > 0 ? formatCny(totals.tariffCny) : "—"}
-                <span className="ml-2 text-xs text-muted-foreground">
-                  (¥{totals.tariffJpy.toLocaleString()})
-                </span>
-              </span>
-            </div>
-            <div className="mt-2 flex items-center justify-between border-t pt-2 text-base font-semibold">
-              <span>= 合计应付</span>
-              <span className="font-mono">
-                {totals.grandCny > 0
-                  ? formatCny(totals.grandCny)
-                  : formatJpy(totals.grandJpy)}
-              </span>
-            </div>
+              {tlSteps.length > 0 && (
+                <div className="mt-3">
+                  <RecognizeTimeline steps={tlSteps} />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 1. 订单信息 */}
+          <Card className="border-border/60 shadow-card">
+            <CardHeader className="py-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                <span className="h-4 w-1 rounded-full bg-gradient-brand" /> ① 包裹信息
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-3">
+              <F label="订单号" value={parcel.source_order_no} onChange={(v) => setParcel({ ...parcel, source_order_no: v as Str })} />
+              <F label="国际物流单号" value={parcel.tracking_no} onChange={(v) => setParcel({ ...parcel, tracking_no: v as Str })} />
+              <div className="grid gap-1">
+                <Label className="text-xs text-muted-foreground">状态</Label>
+                <Select value={parcel.status} onValueChange={(v) => setParcel({ ...parcel, status: v })}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PARCEL_STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <F label="重量（含包装，g）" type="number" value={parcel.total_weight_g} onChange={(v) => setParcel({ ...parcel, total_weight_g: v as Num })} />
+              <F label="体积 (cm³)" type="number" value={parcel.volume_cm3} onChange={(v) => setParcel({ ...parcel, volume_cm3: v as Num })} />
+              <F label="最大边长 (cm)" type="number" value={parcel.max_side_cm} onChange={(v) => setParcel({ ...parcel, max_side_cm: v as Num })} />
+              <F label="存储天数" type="number" value={parcel.storage_days} onChange={(v) => setParcel({ ...parcel, storage_days: v as Num })} />
+              <F label="状态文字（原始）" value={parcel.status_text} onChange={(v) => setParcel({ ...parcel, status_text: v as Str })} />
+              <div />
+              <F label="收货人" value={parcel.receiver_name} onChange={(v) => setParcel({ ...parcel, receiver_name: v as Str })} />
+              <F label="电话" value={parcel.receiver_phone} onChange={(v) => setParcel({ ...parcel, receiver_phone: v as Str })} />
+              <div className="md:col-span-3">
+                <Label className="text-xs text-muted-foreground">收货地址</Label>
+                <Textarea
+                  rows={2}
+                  value={parcel.receiver_address ?? ""}
+                  onChange={(e) => setParcel({ ...parcel, receiver_address: e.target.value || null })}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 2. 国际物流费用明细 */}
+          <Card className="border-border/60 shadow-card">
+            <CardHeader className="py-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                <span className="h-4 w-1 rounded-full bg-gradient-brand" /> ② 国际物流费用明细
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-3">
+              <F label="国际物流总计（JPY）" type="number" value={intl.intl_total_jpy} onChange={(v) => setIntl({ ...intl, intl_total_jpy: v as Num })} />
+              <F label="结算汇率（1 JPY = ? CNY）" type="number" value={intl.intl_exchange_rate} onChange={(v) => setIntl({ ...intl, intl_exchange_rate: v as Num })} placeholder="如 0.0481" />
+              <F label="商户订单号" value={intl.intl_merchant_order_no} onChange={(v) => setIntl({ ...intl, intl_merchant_order_no: v as Str })} />
+              <F label="支付方式" value={intl.intl_pay_method} onChange={(v) => setIntl({ ...intl, intl_pay_method: v as Str })} />
+              <F label="支付时间" type="datetime" value={intl.intl_pay_at} onChange={(v) => setIntl({ ...intl, intl_pay_at: v as Str })} />
+              <F label="国际物流费（JPY）" type="number" value={intl.intl_freight_jpy} onChange={(v) => setIntl({ ...intl, intl_freight_jpy: v as Num })} />
+              <F label="发送方式" value={intl.intl_ship_method} onChange={(v) => setIntl({ ...intl, intl_ship_method: v as Str })} placeholder="日本邮政 海运件" />
+              <F label="收费方式" value={intl.intl_charge_method} onChange={(v) => setIntl({ ...intl, intl_charge_method: v as Str })} placeholder="按重量收费 18,500g" />
+              <F label="保留原始包装（JPY）" type="number" value={intl.intl_keep_packaging_jpy} onChange={(v) => setIntl({ ...intl, intl_keep_packaging_jpy: v as Num })} />
+              <F label="强化加固（JPY）" type="number" value={intl.intl_reinforce_jpy} onChange={(v) => setIntl({ ...intl, intl_reinforce_jpy: v as Num })} />
+              <F label="发送手续费（JPY）" type="number" value={intl.intl_send_fee_jpy} onChange={(v) => setIntl({ ...intl, intl_send_fee_jpy: v as Num })} />
+              <F label="拍照费（JPY）" type="number" value={intl.intl_photo_fee_jpy} onChange={(v) => setIntl({ ...intl, intl_photo_fee_jpy: v as Num })} />
+              <F label="合单手续费（JPY）" type="number" value={intl.intl_merge_fee_jpy} onChange={(v) => setIntl({ ...intl, intl_merge_fee_jpy: v as Num })} />
+              <F label="已使用积分" type="number" value={intl.intl_points_used} onChange={(v) => setIntl({ ...intl, intl_points_used: v as Num })} />
+            </CardContent>
+          </Card>
+
+          {/* 3. 子订单 */}
+          <Card className="border-border/60 shadow-card">
+            <CardHeader className="flex flex-row items-center justify-between py-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                <span className="h-4 w-1 rounded-full bg-gradient-brand" />
+                ③ 子订单 / 包裹内物品（{items.length} 件）
+              </CardTitle>
+              <Button size="sm" variant="outline" onClick={() => setItems([...items, emptyItem()])}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> 新增子订单
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {items.map((it, idx) => (
+                <div key={it._key} className="rounded-lg border border-border/60 bg-muted/20 p-4 transition-colors hover:bg-muted/30">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{idx + 1}</span>
+                      子订单 #{idx + 1}
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => setItems((arr) => arr.filter((x) => x._key !== it._key))}
+                      disabled={items.length === 1}
+                      aria-label="删除"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="flex gap-3">
+                    <ItemImageUploader
+                      value={it.item_image_url}
+                      onChange={(url) => updateItem(it._key, { item_image_url: url })}
+                    />
+                    <div className="grid flex-1 gap-3 md:grid-cols-3">
+                      <F label="商品标题（日）" value={it.item_title} onChange={(v) => updateItem(it._key, { item_title: v as Str })} />
+                      <F label="商品标题（中）" value={it.item_title_cn} onChange={(v) => updateItem(it._key, { item_title_cn: v as Str })} />
+                      <F label="商品费用 JPY" type="number" value={it.item_total_jpy} onChange={(v) => updateItem(it._key, { item_total_jpy: v as Num })} />
+                      <F label="≈ CNY" type="number" value={it.item_total_cny} onChange={(v) => updateItem(it._key, { item_total_cny: v as Num })} />
+                      <F label="结算汇率" type="number" value={it.exchange_rate} onChange={(v) => updateItem(it._key, { exchange_rate: v as Num })} />
+                      <F label="订单编号" value={it.sub_order_no} onChange={(v) => updateItem(it._key, { sub_order_no: v as Str })} />
+                      <F label="商户订单号" value={it.merchant_order_no} onChange={(v) => updateItem(it._key, { merchant_order_no: v as Str })} />
+                      <F label="入库重量（g）" type="number" value={it.weight_g} onChange={(v) => updateItem(it._key, { weight_g: v as Num })} />
+                      <F label="商品价格（JPY）" type="number" value={it.unit_price_jpy} onChange={(v) => updateItem(it._key, { unit_price_jpy: v as Num })} />
+                      <F label="数量" type="number" value={it.quantity} onChange={(v) => updateItem(it._key, { quantity: v as Num })} />
+                      <F label="手续费（JPY）" type="number" value={it.service_fee_jpy} onChange={(v) => updateItem(it._key, { service_fee_jpy: v as Num })} />
+                      <F label="日本国内运费（JPY）" type="number" value={it.domestic_freight_jpy} onChange={(v) => updateItem(it._key, { domestic_freight_jpy: v as Num })} />
+                      <F label="运费补差（JPY）" type="number" value={it.freight_diff_jpy} onChange={(v) => updateItem(it._key, { freight_diff_jpy: v as Num })} />
+                      <F label="支付方式" value={it.pay_method} onChange={(v) => updateItem(it._key, { pay_method: v as Str })} />
+                      <F label="支付时间" type="datetime" value={it.pay_at} onChange={(v) => updateItem(it._key, { pay_at: v as Str })} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* === Right sidebar (sticky totals) === */}
+        <div className="lg:col-span-4">
+          <div className="sticky top-4 space-y-4">
+            <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent shadow-elegant">
+              <CardHeader className="py-3">
+                <CardTitle className="text-sm font-semibold">实时合计</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">商品 ({items.length})</span>
+                    <span className="font-mono tabular-nums">{formatJpy(totals.itemsTotalJpy)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">+ 国际物流</span>
+                    <span className="font-mono tabular-nums">{formatJpy(totals.intlTotalJpy)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-border/60 pt-2 font-medium">
+                    <span>= 日本侧 (JPY)</span>
+                    <span className="font-mono tabular-nums">{formatJpy(totals.grandJpy)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">+ 关税 (CNY)</span>
+                    <span className="font-mono tabular-nums">
+                      {totals.tariffCny > 0 ? formatCny(totals.tariffCny) : "—"}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-baseline justify-between border-t border-border pt-3">
+                    <span className="text-xs text-muted-foreground">合计应付</span>
+                    <span className="font-mono text-2xl font-semibold tabular-nums">
+                      {totals.grandCny > 0
+                        ? formatCny(totals.grandCny)
+                        : formatJpy(totals.grandJpy)}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Button
+              size="lg"
+              className="w-full bg-gradient-brand shadow-elegant hover:opacity-90"
+              onClick={() => saveMut.mutate()}
+              disabled={saveMut.isPending}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {saveMut.isPending ? "保存中…" : "保存包裹"}
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
