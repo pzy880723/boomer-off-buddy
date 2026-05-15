@@ -364,22 +364,22 @@ function JapanParcelList() {
           {rows.length === 0 ? (
             <EmptyState
               title="暂无小包裹订单"
-              description="可以截图批量导入、单条 AI 识图，或手动新建。"
+              description="可以单条 AI 识图，或手动新建。"
             />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow className="border-b bg-muted/30 hover:bg-muted/30">
-                  <TableHead className="w-[36px]">
+                  <TableHead className="w-[36px] text-center">
                     <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="全选" />
                   </TableHead>
-                  <TableHead className="w-[64px] text-[11px] uppercase tracking-wider text-muted-foreground">图</TableHead>
+                  <TableHead className="w-[64px] text-center text-[11px] uppercase tracking-wider text-muted-foreground">图</TableHead>
                   <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">订单 / 标题</TableHead>
                   <TableHead className="w-[60px] text-center text-[11px] uppercase tracking-wider text-muted-foreground">子单</TableHead>
-                  <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">合计</TableHead>
-                  <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">采购时间</TableHead>
-                  <TableHead className="w-[110px] text-[11px] uppercase tracking-wider text-muted-foreground">状态</TableHead>
-                  <TableHead className="w-[160px] text-right text-[11px] uppercase tracking-wider text-muted-foreground">操作</TableHead>
+                  <TableHead className="text-center text-[11px] uppercase tracking-wider text-muted-foreground">合计</TableHead>
+                  <TableHead className="text-center text-[11px] uppercase tracking-wider text-muted-foreground">采购时间</TableHead>
+                  <TableHead className="w-[110px] text-center text-[11px] uppercase tracking-wider text-muted-foreground">状态</TableHead>
+                  <TableHead className="w-[160px] text-center text-[11px] uppercase tracking-wider text-muted-foreground">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
