@@ -101,6 +101,8 @@ interface SubItem {
   pay_method: Str;
   pay_at: Str;
   merchant_order_no: Str;
+  tariff_category: Str;
+  tariff_rate: Num;
 }
 
 const emptyParcel = (): ParcelInfo => ({
