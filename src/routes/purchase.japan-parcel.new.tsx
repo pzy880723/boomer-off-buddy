@@ -19,7 +19,14 @@ import {
 } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
 import { ScreenshotDropzone } from "@/components/screenshot-dropzone";
-import { PARCEL_STATUS_OPTIONS, formatJpy, formatCny } from "@/lib/japan-parcel.helpers";
+import {
+  PARCEL_STATUS_OPTIONS,
+  formatJpy,
+  formatCny,
+  sumTariffJpy,
+  sumFreightDiffJpy,
+  computeGrandTotal,
+} from "@/lib/japan-parcel.helpers";
 import { createJapanParcel, bulkCreateParcelItems } from "@/lib/japan-parcel.functions";
 import {
   segmentParcelText,
