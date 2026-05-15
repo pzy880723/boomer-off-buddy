@@ -25,14 +25,10 @@ import {
   computeGrandTotal,
 } from "@/lib/japan-parcel.helpers";
 import { createJapanParcel, bulkCreateParcelItems } from "@/lib/japan-parcel.functions";
-import type { RecognizedResult } from "@/components/japan-parcel/smart-recognize-panel";
-
-// Lazy-load the heavy AI recognition panel — keeps initial route chunk small
-const SmartRecognizePanel = lazy(() =>
-  import("@/components/japan-parcel/smart-recognize-panel").then((m) => ({
-    default: m.SmartRecognizePanel,
-  })),
-);
+import {
+  SmartRecognizePanel,
+  type RecognizedResult,
+} from "@/components/japan-parcel/smart-recognize-panel";
 
 const ItemImageUploader = lazy(() =>
   import("@/components/japan-parcel/item-image-uploader").then((m) => ({
@@ -309,26 +305,12 @@ function NewParcelPage() {
       <div className="grid gap-5 lg:grid-cols-12">
         {/* === Left main column === */}
         <div className="space-y-5 lg:col-span-8">
-          {/* Smart fill — lazy loaded on demand */}
+          {/* Smart fill */}
           {smartOpen ? (
-            <Suspense
-              fallback={
-                <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-                  <CardContent className="py-6 text-center text-xs text-muted-foreground">
-                    正在加载智能识别模块…
-                  </CardContent>
-                </Card>
-              }
-            >
-              <SmartRecognizePanel onApply={handleRecognized} />
-            </Suspense>
+            <SmartRecognizePanel onApply={handleRecognized} />
           ) : (
             <Card
               className="cursor-pointer border-primary/20 bg-gradient-to-br from-primary/5 to-transparent shadow-card transition hover:border-primary/40"
-              onMouseEnter={() => {
-                // Warm the chunk on hover
-                void import("@/components/japan-parcel/smart-recognize-panel");
-              }}
               onClick={() => setSmartOpen(true)}
             >
               <CardContent className="flex items-center justify-between py-4">
