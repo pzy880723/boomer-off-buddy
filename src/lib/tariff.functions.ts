@@ -45,7 +45,7 @@ export const classifyItemsTariff = createServerFn({ method: "POST" })
         "X-Lovable-AIG-SDK": "vercel-ai-sdk",
       },
     });
-    const model = gateway("google/gemini-2.5-flash");
+    
 
     const dictText = TARIFF_CATEGORIES.map(
       (c) => `- ${c.key} (${c.label}, ${Math.round(c.rate * 100)}%)`,
