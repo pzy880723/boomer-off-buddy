@@ -155,7 +155,7 @@ function JapanParcelList() {
       if (need.length >= 20) break;
     }
     if (need.length === 0) return;
-    (async () => {
+    const run = async () => {
       try {
         const r = await fnTranslate({ data: { titles: need.map((n) => n.jp) } });
         if (!r.ok) return;
@@ -164,7 +164,6 @@ function JapanParcelList() {
           .filter((u): u is { id: string; item_title_cn: string } => !!u.item_title_cn);
         if (updates.length === 0) return;
         await fnSaveTitles({ data: { updates } });
-        // 直接合并到现有缓存，避免再发一次列表请求
         const map = new Map(updates.map((u) => [u.id, u.item_title_cn]));
         qc.setQueriesData<ListData>({ queryKey: ["jp-parcels"] }, (data) => {
           if (!data) return data;
@@ -181,7 +180,21 @@ function JapanParcelList() {
       } catch {
         /* silent */
       }
-    })();
+    };
+    // 等首屏渲染完再发翻译请求，避免抢占数据加载
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    };
+    const handle = w.requestIdleCallback
+      ? w.requestIdleCallback(() => void run(), { timeout: 2000 })
+      : window.setTimeout(() => void run(), 800);
+    return () => {
+      if (w.requestIdleCallback && "cancelIdleCallback" in window) {
+        (window as unknown as { cancelIdleCallback: (h: number) => void }).cancelIdleCallback(handle);
+      } else {
+        window.clearTimeout(handle);
+      }
+    };
   }, [allRows, fnTranslate, fnSaveTitles, qc]);
 
   const statusMut = useMutation({
