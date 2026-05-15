@@ -212,6 +212,8 @@ const ItemUpdateSchema = z.object({
   pay_method: z.string().nullable().optional(),
   pay_at: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  tariff_category: z.string().nullable().optional(),
+  tariff_rate: z.number().nullable().optional(),
 });
 
 export const updateParcelItem = createServerFn({ method: "POST" })
