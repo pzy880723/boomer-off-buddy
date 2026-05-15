@@ -152,6 +152,8 @@ const emptyItem = (): SubItem => ({
   pay_method: null,
   pay_at: null,
   merchant_order_no: null,
+  tariff_category: null,
+  tariff_rate: null,
 });
 
 // 关税 = Σ(子订单 item_total_jpy * tariff_rate)，税率由 AI 分类后写入子订单
