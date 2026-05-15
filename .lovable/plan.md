@@ -1,38 +1,62 @@
-## 现状盘点
+## 背景
 
-合计费用应包含 4 项：**商品总额 + 国际物流小计 + Σ运费补差 + Σ关税**。
-排查后发现三处口径不一致：
+你确认：`intl_total_jpy`（国际物流小计）里**已经包含**了国际运费、包装/加固/手续费、以及日本国内运费补差（freight_diff）。所以之前我把 `Σfreight_diff_jpy` 再叠加到合计里，是**重复计算**了。
 
-| 位置 | 商品额 | 国际物流 | 运费补差 | 关税 | 备注 |
-|---|---|---|---|---|---|
-| `parcel-edit-sections.tsx`（编辑/概览） | ✅ | ✅ | ✅ | ✅ 按子订单 `tariff_rate` | **正确** |
-| `purchase.japan-parcel.new.tsx`（新建页） | ✅ | ✅ | ❌ 漏算 | ❌ 用全局 `TARIFF_RATE = 0`，忽略 AI 识别的子订单类目税率 | CNY 还写错成 `*rate`（应为 `/rate`） |
-| `purchase.japan-parcel.index.tsx`（列表行兜底） | ✅ | ✅ | ❌ 漏算 | ✅ 用已存的 `r.tariff_jpy` | 仅当包裹未保存 `grand_total_jpy` 时走兜底；当前列表 select 也没拉 `freight_diff_jpy` |
+关税仍然需要单独算（按子订单的 `tariff_rate`），并按汇率换算成 CNY，再合到最终合计。
 
-## 修复方案
+## 新口径（统一三个视图）
 
-### 1. 新建页 `purchase.japan-parcel.new.tsx` 重写 totals
-- 删除 `TARIFF_RATE` 常量
-- 复用 `sumTariffJpy` / `sumFreightDiffJpy` / `computeGrandTotal`（来自 `japan-parcel.helpers.ts`）
-- 公式：`grandJpy = itemsTotalJpy + intlTotalJpy + freightDiffJpy + tariffJpy`
-- 修正 CNY：`grandJpy / rate`（汇率是 JPY/CNY，不是 CNY/JPY）
-- 底部"+ 关税（0%，可后续配置）"一行改为按子订单分类税率合计 + 单独显示运费补差合计
+```
+合计 JPY = Σ商品小计(item_total_jpy)
+        + 国际物流小计(intl_total_jpy)
+        + 关税(Σ item_total_jpy × tariff_rate)
 
-### 2. 新建页保存时也写入 `freight_diff` 已经在 items 里，无需改库
-保存逻辑保持把 `tariff_jpy / grand_total_*` 一起写入即可（已带 `freight_diff_jpy` 在每条 item 里）。
+合计 CNY = 合计 JPY / 汇率(intl_exchange_rate)
+关税 CNY = 关税 JPY / 汇率
+```
 
-### 3. 列表行 `purchase.japan-parcel.index.tsx` 兜底公式补 `freight_diff`
-- `listJapanParcels` select 增加 `freight_diff_jpy` 到 items（影响一点点 payload 体积，可接受）
-- 兜底公式改为：`subSumJpy + intl_total_jpy + Σfreight_diff + tariff_jpy`
-- 已保存 `grand_total_jpy` 的行依然优先用存量值
+不再出现 `freight_diff` 相关的合计行。
 
-### 4. （可选）保存触发器
-新建页默认调用 `classifyItemsTariff` 后端分类一次，确保 `tariff_rate` 已写入再算合计；如果用户跳过 AI，关税就为 0（与编辑页行为一致）。
+## 需要改的地方
 
-## 受影响文件
+### 1. `src/lib/japan-parcel.helpers.ts`
+- `computeGrandTotal({...})`：移除 `freightDiffJpy` 入参与累加。
+- 保留 `sumFreightDiffJpy`（明细行还会用，但不再进合计），或顺手删掉——倾向**保留**，避免多文件改动。
 
-- `src/routes/purchase.japan-parcel.new.tsx`
-- `src/routes/purchase.japan-parcel.index.tsx`
-- `src/lib/japan-parcel.functions.ts`（list select 加字段）
+### 2. `src/components/japan-parcel/parcel-edit-sections.tsx`
+两个组件都改：
+- `ParcelEditSections`（编辑视图 ④ 合计费用）：
+  - 移除 `freightDiffJpy` prop。
+  - "建议值" 公式改为 `items + intlTotal + tariff`。
+  - 底部 4 列指标网格删掉「运费补差合计」，改成 3 列：商品总额 / 国际物流小计 / 关税（含 CNY）。
+- `ParcelOverviewSections`（详情只读视图 ④）：同上，删除「运费补差合计」列与公式中的 `freightDiffJpy`。
+- 关税那一栏同时显示 `¥xxx ≈ ￥xxx`（按 `intl_exchange_rate` 换算）。
 
-不动后端 schema、不动编辑/概览页（已经正确）。
+### 3. `src/components/japan-parcel/parcel-edit-panel.tsx`（调用方）
+不再向 `ParcelEditSections / ParcelOverviewSections` 传 `freightDiffJpy`。
+
+### 4. `src/routes/purchase.japan-parcel.new.tsx`（新建页 ④ 合计）
+- 移除 `sumFreightDiffJpy` 调用与 `freightDiffJpy` 变量。
+- `computeGrandTotal` 不传 `freightDiffJpy`。
+- "费用明细" 卡片删除「运费补差」一行，保留：商品总额 / 国际物流 / 关税（JPY + CNY）/ 合计（JPY + CNY）。
+
+### 5. `src/routes/purchase.japan-parcel.index.tsx`（列表行 fallback 合计）
+当行未保存 `grand_total_jpy` 时的 fallback 公式：
+```
+totalJpy = Σitem_total_jpy + intl_total_jpy + Σ(item_total_jpy × tariff_rate || 已存的 tariff_jpy)
+```
+即从 `items.reduce` 中**去掉** `freight_diff_jpy` 一项。
+（顺带：列表 select 之前为支持补差合计加上了 `freight_diff_jpy`，可保留，不影响。）
+
+## 不动的部分
+
+- 数据库字段不动（`freight_diff_jpy` 仍按需录入，只是不进最终合计）。
+- 子订单编辑表单仍保留「日本国内运费补差」字段，方便人工核对/审计，但不再展示"补差合计"，也不进合计公式。
+- 关税分类（`classifyItemsTariff` serverFn）逻辑不动。
+
+## 验收
+
+- 编辑视图 ④：建议值 = 商品 + 国际物流 + 关税；点「使用建议值」写入 `grand_total_jpy/cny` 与 `tariff_jpy/cny`。
+- 详情只读 ④：4 列变 3 列，无「运费补差合计」。
+- 新建页右侧 ④：无「运费补差」，关税同时给 CNY，合计 CNY = 合计 JPY / 汇率。
+- 列表行未保存合计的 fallback 数值与上述一致。
