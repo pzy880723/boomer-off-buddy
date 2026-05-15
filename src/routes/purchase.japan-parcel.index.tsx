@@ -481,12 +481,19 @@ function JapanParcelList() {
                         )}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">
-                        {totalJpy > 0 ? `¥${totalJpy.toLocaleString()}` : "—"}
-                        {r.grand_total_cny ? (
+                        {totalCny > 0
+                          ? `￥${Math.round(totalCny).toLocaleString()}`
+                          : totalJpy > 0
+                            ? `¥${totalJpy.toLocaleString()}`
+                            : "—"}
+                        {totalCny > 0 && totalJpy > 0 && (
                           <div className="text-[10px] text-muted-foreground">
-                            ≈￥{Number(r.grand_total_cny).toLocaleString()}
+                            日¥{totalJpy.toLocaleString()}
+                            {tariffCny > 0
+                              ? ` + 关税￥${Math.round(tariffCny).toLocaleString()}`
+                              : ""}
                           </div>
-                        ) : null}
+                        )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {r.purchased_at ? new Date(r.purchased_at).toLocaleDateString() : "—"}
