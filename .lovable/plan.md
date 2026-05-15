@@ -1,83 +1,38 @@
-## 现状诊断
+## 现状盘点
 
-数据本身只有 1 条包裹 + 2 条子订单，DB 查询不应该慢。"慢"主要来自请求链路和加载策略：
+合计费用应包含 4 项：**商品总额 + 国际物流小计 + Σ运费补差 + Σ关税**。
+排查后发现三处口径不一致：
 
-1. **SSR loader 是 fire-and-forget**
-   `purchase.japan-parcel.index.tsx` 里：
-   ```ts
-   loader: ({ context }) => {
-     context.queryClient.ensureQueryData({...});  // 没 return、没 await
-   }
-   ```
-   结果是服务端不等数据就先把 HTML 吐出来，浏览器拿到的是"加载中…"骨架，之后还得再发一次 `_serverFn` 请求把数据拉回来。冷启动 worker + 一次往返 ≈ 1-3s 的"白屏感"。
+| 位置 | 商品额 | 国际物流 | 运费补差 | 关税 | 备注 |
+|---|---|---|---|---|---|
+| `parcel-edit-sections.tsx`（编辑/概览） | ✅ | ✅ | ✅ | ✅ 按子订单 `tariff_rate` | **正确** |
+| `purchase.japan-parcel.new.tsx`（新建页） | ✅ | ✅ | ❌ 漏算 | ❌ 用全局 `TARIFF_RATE = 0`，忽略 AI 识别的子订单类目税率 | CNY 还写错成 `*rate`（应为 `/rate`） |
+| `purchase.japan-parcel.index.tsx`（列表行兜底） | ✅ | ✅ | ❌ 漏算 | ✅ 用已存的 `r.tariff_jpy` | 仅当包裹未保存 `grand_total_jpy` 时走兜底；当前列表 select 也没拉 `freight_diff_jpy` |
 
-2. **列表 query 仍然偏胖**
-   `select` 拼了 28 列父表 + 13 列子表，`limit 500`，且没分页；同时还有 `or(... ilike ...)` 搜索（`item_title / source_order_no / tracking_no / seller / receiver_name`）。当前虽然只 1 行无所谓，但等数据涨起来会线性变慢，并且这些搜索字段没有索引。
+## 修复方案
 
-3. **进入列表后还会触发两次额外的 serverFn**
-   `useEffect` 里"懒翻译前 20 条缺中文标题的子订单"——会调用 `translateTitles` + `bulkSetItemTitlesCn`。即使数据已显示，UI 也会因为 `setQueriesData` 重渲染，看上去像"还在转"。
+### 1. 新建页 `purchase.japan-parcel.new.tsx` 重写 totals
+- 删除 `TARIFF_RATE` 常量
+- 复用 `sumTariffJpy` / `sumFreightDiffJpy` / `computeGrandTotal`（来自 `japan-parcel.helpers.ts`）
+- 公式：`grandJpy = itemsTotalJpy + intlTotalJpy + freightDiffJpy + tariffJpy`
+- 修正 CNY：`grandJpy / rate`（汇率是 JPY/CNY，不是 CNY/JPY）
+- 底部"+ 关税（0%，可后续配置）"一行改为按子订单分类税率合计 + 单独显示运费补差合计
 
-4. **Router 预取与 Query 缓存重复计时**
-   `router.tsx` 设 `defaultPreloadStaleTime: 10_000`，而组件用的是 `useQuery` + `staleTime: 60_000`，loader 又自己设了 `staleTime: 60_000`。两套 SWR 叠加，preload 命中后还是会触发后台 refetch，肉眼能看到一次"刷新"。
+### 2. 新建页保存时也写入 `freight_diff` 已经在 items 里，无需改库
+保存逻辑保持把 `tariff_jpy / grand_total_*` 一起写入即可（已带 `freight_diff_jpy` 在每条 item 里）。
 
-## 优化方案
+### 3. 列表行 `purchase.japan-parcel.index.tsx` 兜底公式补 `freight_diff`
+- `listJapanParcels` select 增加 `freight_diff_jpy` 到 items（影响一点点 payload 体积，可接受）
+- 兜底公式改为：`subSumJpy + intl_total_jpy + Σfreight_diff + tariff_jpy`
+- 已保存 `grand_total_jpy` 的行依然优先用存量值
 
-### A. 让首屏数据跟着 SSR 一起到（最大收益）
+### 4. （可选）保存触发器
+新建页默认调用 `classifyItemsTariff` 后端分类一次，确保 `tariff_rate` 已写入再算合计；如果用户跳过 AI，关税就为 0（与编辑页行为一致）。
 
-把 loader 改成"返回/await"形式，并把组件切成 `useSuspenseQuery`，这样：
-- 服务端就把首屏 JSON 序列化进 HTML，刷新即出，不再有"加载中…"。
-- 浏览器端不再多发一次 `_serverFn` 请求。
+## 受影响文件
 
-```ts
-// src/routes/purchase.japan-parcel.index.tsx
-const listOptions = (search: string, sources: string[]) => ({
-  queryKey: buildListKey(search, sources),
-  queryFn: () =>
-    listJapanParcels({
-      data: { search, source: sources.length ? sources : undefined },
-    }),
-  staleTime: 60_000,
-});
+- `src/routes/purchase.japan-parcel.new.tsx`
+- `src/routes/purchase.japan-parcel.index.tsx`
+- `src/lib/japan-parcel.functions.ts`（list select 加字段）
 
-export const Route = createFileRoute("/purchase/japan-parcel/")({
-  loader: ({ context }) =>
-    context.queryClient.ensureQueryData(listOptions("", [])),
-  component: JapanParcelList,
-});
-
-// 组件里：
-const list = useSuspenseQuery(listOptions(debouncedSearch, sources));
-```
-
-同时把 `src/router.tsx` 的 `defaultPreloadStaleTime` 改回 `0`，让 Query 单独管"新鲜度"，避免双层缓存打架。
-
-### B. 收缩 list serverFn 的 payload
-
-把列表 `select` 再瘦身（首屏不需要的列移到详情接口里）：
-- 父表只保留：`id, source, source_order_no, tracking_no, status, item_title_cn, item_title, item_image_url, total_jpy, grand_total_jpy, grand_total_cny, tariff_jpy, intl_total_jpy, purchased_at`。
-- 子表只保留：`id, item_title, item_title_cn, item_image_url, item_total_jpy`。
-其余 `intl_*`、`weight_g`、`tariff_*` 这些只在详情/编辑页用，不在列表渲染。
-
-加个分页/截断：默认 `limit 100`，等需要再说"加载更多"。
-
-### C. 把懒翻译延后，避免视觉抖动
-
-- 用 `requestIdleCallback`(降级 `setTimeout(…, 800)`) 触发，且仅在列表真的有缺译条目时执行。
-- 翻译完成后用 `setQueriesData` 静默合并（已经是这样），但**只更新当前可见行**，不要一次性 20 条全打。
-
-### D. 给搜索加索引（可选，数据起来再做）
-
-为 `japan_parcels.source_order_no / tracking_no` 建普通 btree 索引，`item_title` 用 trigram 索引（`pg_trgm`），让 `ilike '%xxx%'` 能走索引而不是顺序扫描。
-
-## 预期效果
-
-- 第一次打开：从"白屏 1-3s + 加载中骨架"变成 SSR 直出，**首屏即数据**。
-- 列表内切换/返回：命中 Query 缓存，**无网络请求、瞬开**。
-- 后续数据增长后，瘦 select + 索引保证不会线性变慢。
-
-## 实施顺序
-
-1. 改 loader + 组件为 `useSuspenseQuery`，调整 `defaultPreloadStaleTime`（A）。
-2. 收窄 `listJapanParcels` 的 `select` 字段并加 `limit 100`（B）。
-3. 懒翻译挪到 idle 回调（C）。
-4. （可选）后续数据量上来再加索引（D）。
+不动后端 schema、不动编辑/概览页（已经正确）。

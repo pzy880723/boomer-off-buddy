@@ -90,7 +90,7 @@ export const listJapanParcels = createServerFn({ method: "GET" })
     let q = supabaseAdmin
       .from("japan_parcels")
       .select(
-        "id,source,source_order_no,tracking_no,status,item_title,item_title_cn,item_image_url,total_jpy,intl_total_jpy,tariff_jpy,grand_total_jpy,grand_total_cny,purchased_at,created_at, japan_parcel_items(id, item_title, item_title_cn, item_image_url, item_total_jpy)",
+        "id,source,source_order_no,tracking_no,status,item_title,item_title_cn,item_image_url,total_jpy,intl_total_jpy,tariff_jpy,grand_total_jpy,grand_total_cny,purchased_at,created_at, japan_parcel_items(id, item_title, item_title_cn, item_image_url, item_total_jpy, freight_diff_jpy)",
       )
       .order("created_at", { ascending: false })
       .limit(100);
