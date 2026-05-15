@@ -641,3 +641,34 @@ function JapanParcelList() {
     </div>
   );
 }
+
+function SortHeader({
+  label,
+  title,
+  active,
+  dir,
+  onClick,
+}: {
+  label: string;
+  title?: string;
+  active: boolean;
+  dir: SortDir;
+  onClick: () => void;
+}) {
+  const Icon = active ? (dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={cn(
+        "inline-flex items-center gap-1 text-[11px] uppercase tracking-wider transition-colors",
+        active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {label}
+      <Icon className={cn("h-3 w-3", !active && "opacity-40")} />
+    </button>
+  );
+}
+
