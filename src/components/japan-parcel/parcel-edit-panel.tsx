@@ -315,22 +315,39 @@ export function ParcelEditPanel({
     </div>
   );
 
+  const isDelivered = row.status === "delivered";
+  const nextStatus = isDelivered ? "purchased" : "delivered";
+  const nextStatusLabel = isDelivered ? "撤销签收" : "确认签收";
+  const currentLabel =
+    PARCEL_STATUS_OPTIONS.find((s) => s.value === row.status)?.label ?? row.status;
+
   return (
     <div className="space-y-4">
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-2 py-3">
-          <span className="mr-2 text-xs text-muted-foreground">快捷修改状态：</span>
-          {PARCEL_STATUS_OPTIONS.map((s) => (
+      <Card className="border-border/60 shadow-card">
+        <CardContent className="flex flex-wrap items-center gap-3 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">当前状态</span>
+            {isDelivered ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 text-xs font-medium text-success">
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                {currentLabel}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium">
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+                {currentLabel}
+              </span>
+            )}
             <Button
-              key={s.value}
               size="sm"
-              variant={row.status === s.value ? "default" : "outline"}
-              onClick={() => statusMut.mutate(s.value)}
-              disabled={statusMut.isPending || row.status === s.value}
+              variant={isDelivered ? "ghost" : "default"}
+              className={isDelivered ? "h-7 text-xs" : "h-7 bg-success text-success-foreground hover:bg-success/90 text-xs"}
+              disabled={statusMut.isPending}
+              onClick={() => statusMut.mutate(nextStatus)}
             >
-              {s.label}
+              {nextStatusLabel}
             </Button>
-          ))}
+          </div>
           <div className="ml-auto flex items-center gap-2">
             <Button
               variant="outline"
@@ -340,7 +357,7 @@ export function ParcelEditPanel({
               title={items.length === 0 ? "无子订单" : "AI 识别每个子订单的关税类目"}
             >
               <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              {classifyMut.isPending ? "识别中…" : "AI 识别关税类目"}
+              {classifyMut.isPending ? "识别中…" : "AI 关税类目"}
             </Button>
             <Button
               variant="outline"
