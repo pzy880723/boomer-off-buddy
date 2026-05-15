@@ -194,10 +194,10 @@ export function ParcelEditSections({
   const rate = num(value.intl_exchange_rate);
   // JPY 合计：商品 + 国际物流（关税在国内付，不进 JPY）
   const suggestedJpy = itemsTotalJpy + intlTotal;
-  const tariffCny = rate > 0 ? Math.round((tariffJpy / rate) * 100) / 100 : null;
+  const tariffCny = rate > 0 ? Math.round((tariffJpy * rate) * 100) / 100 : null;
   const suggestedCny =
     rate > 0
-      ? Math.round((suggestedJpy / rate + (tariffCny ?? 0)) * 100) / 100
+      ? Math.round((suggestedJpy * rate + (tariffCny ?? 0)) * 100) / 100
       : null;
 
   return (
@@ -284,10 +284,10 @@ export function ParcelOverviewSections({
   const computedJpy = itemsTotalJpy + intlTotal;
   const grandJpy =
     value.grand_total_jpy != null ? num(value.grand_total_jpy) : computedJpy;
-  const tariffCny = rate > 0 ? Math.round((tariffJpy / rate) * 100) / 100 : null;
+  const tariffCny = rate > 0 ? Math.round((tariffJpy * rate) * 100) / 100 : null;
   const computedCny =
     rate > 0
-      ? Math.round((grandJpy / rate + (tariffCny ?? 0)) * 100) / 100
+      ? Math.round((grandJpy * rate + (tariffCny ?? 0)) * 100) / 100
       : null;
   const grandCny =
     value.grand_total_cny != null ? num(value.grand_total_cny) : computedCny;
