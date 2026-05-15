@@ -19,6 +19,7 @@ import {
 import { tariffCategoryLabel, rateToPercent } from "@/lib/tariff";
 import { getJapanParcel } from "@/lib/japan-parcel.functions";
 import { ParcelOverviewSections } from "./parcel-edit-sections";
+import { CurrencyToggle } from "./currency-toggle";
 import type { ParcelFormValue } from "@/components/parcel-form";
 
 const ParcelEditPanel = lazy(() =>
@@ -120,6 +121,7 @@ export function ParcelCardDialog({
             {q.isFetching && (
               <span className="text-[10px] text-muted-foreground">加载中…</span>
             )}
+            <CurrencyToggle className="ml-auto" />
           </DialogTitle>
         </DialogHeader>
 

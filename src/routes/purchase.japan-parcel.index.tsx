@@ -51,6 +51,8 @@ import {
 import { useDebounced } from "@/hooks/use-debounced";
 import type { ParcelCardData, ParcelCardItem } from "@/components/japan-parcel/parcel-card-dialog";
 import { ItemsHoverPreview } from "@/components/japan-parcel/items-hover-preview";
+import { CurrencyToggle } from "@/components/japan-parcel/currency-toggle";
+import { useCurrencyDisplay } from "@/hooks/use-currency-display";
 
 const ParcelCardDialog = lazy(() =>
   import("@/components/japan-parcel/parcel-card-dialog").then((m) => ({
@@ -120,6 +122,7 @@ function JapanParcelList() {
   const [sources, setSources] = useState<string[]>([]);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
+  const [currency] = useCurrencyDisplay();
   const debouncedSearch = useDebounced(search, 300);
 
   const list = useQuery({
@@ -282,6 +285,11 @@ function JapanParcelList() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">币种</span>
+            <CurrencyToggle />
+          </div>
         </CardContent>
       </Card>
 
@@ -406,17 +414,17 @@ function JapanParcelList() {
                       <TableCell className="text-right">
                         {totalCny > 0 || totalJpy > 0 ? (
                           <div className="space-y-0.5">
-                            {totalJpy > 0 && (
+                            {currency !== "cny" && totalJpy > 0 && (
                               <div className="font-mono text-sm font-semibold tabular-nums">
                                 ¥{totalJpy.toLocaleString()}
                               </div>
                             )}
-                            {totalCny > 0 && (
+                            {currency !== "jpy" && totalCny > 0 && (
                               <div className="font-mono text-sm font-semibold tabular-nums">
                                 ￥{Math.round(totalCny).toLocaleString()}
                               </div>
                             )}
-                            {tariffCny > 0 && (
+                            {currency !== "jpy" && tariffCny > 0 && (
                               <div className="font-mono text-[10px] text-muted-foreground tabular-nums">
                                 税 ￥{Math.round(tariffCny).toLocaleString()}
                               </div>
