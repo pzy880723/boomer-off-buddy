@@ -368,7 +368,6 @@ function JapanParcelList() {
 
       <Card>
         <CardContent className="p-0">
-          {rows.length === 0 ? null : false}
           {rows.length === 0 ? (
             <EmptyState
               title="暂无小包裹订单"
