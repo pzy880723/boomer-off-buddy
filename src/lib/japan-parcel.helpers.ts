@@ -83,6 +83,45 @@ export function formatCny(v: number | null | undefined): string {
   return `￥${Number(v).toLocaleString()}`;
 }
 
+// ===== 关税与合计计算 =====
+
+export interface TariffItemLike {
+  item_total_jpy?: number | null;
+  tariff_rate?: number | null;
+  freight_diff_jpy?: number | null;
+}
+
+export function computeItemTariffJpy(it: TariffItemLike): number {
+  const total = Number(it.item_total_jpy) || 0;
+  const rate = Number(it.tariff_rate) || 0;
+  return Math.round(total * rate);
+}
+
+export function sumTariffJpy(items: TariffItemLike[]): number {
+  return items.reduce((s, it) => s + computeItemTariffJpy(it), 0);
+}
+
+export function sumFreightDiffJpy(items: TariffItemLike[]): number {
+  return items.reduce((s, it) => s + (Number(it.freight_diff_jpy) || 0), 0);
+}
+
+export function computeGrandTotal(opts: {
+  itemsTotalJpy: number;
+  intlTotalJpy: number;
+  freightDiffJpy: number;
+  tariffJpy: number;
+  exchangeRate?: number | null;
+}): { jpy: number; cny: number | null } {
+  const jpy =
+    (opts.itemsTotalJpy || 0) +
+    (opts.intlTotalJpy || 0) +
+    (opts.freightDiffJpy || 0) +
+    (opts.tariffJpy || 0);
+  const r = Number(opts.exchangeRate) || 0;
+  const cny = r > 0 ? Math.round((jpy / r) * 100) / 100 : null;
+  return { jpy, cny };
+}
+
 // ===== UI 简化状态：仅「已采购 / 已签收」两档 =====
 export type SimpleStatus = "purchased" | "delivered";
 

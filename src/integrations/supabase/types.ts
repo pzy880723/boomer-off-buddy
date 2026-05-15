@@ -40,6 +40,8 @@ export type Database = {
           service_fee_jpy: number | null
           source_platform: string | null
           sub_order_no: string | null
+          tariff_category: string | null
+          tariff_rate: number | null
           unit_price_jpy: number | null
           updated_at: string
           weight_g: number | null
@@ -69,6 +71,8 @@ export type Database = {
           service_fee_jpy?: number | null
           source_platform?: string | null
           sub_order_no?: string | null
+          tariff_category?: string | null
+          tariff_rate?: number | null
           unit_price_jpy?: number | null
           updated_at?: string
           weight_g?: number | null
@@ -98,6 +102,8 @@ export type Database = {
           service_fee_jpy?: number | null
           source_platform?: string | null
           sub_order_no?: string | null
+          tariff_category?: string | null
+          tariff_rate?: number | null
           unit_price_jpy?: number | null
           updated_at?: string
           weight_g?: number | null

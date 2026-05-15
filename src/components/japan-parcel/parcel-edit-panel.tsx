@@ -2,10 +2,17 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Save, Trash2 } from "lucide-react";
+import { Save, Trash2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   deleteJapanParcel,
   deleteParcelItem,
@@ -14,7 +21,14 @@ import {
   updateJapanParcelStatus,
   updateParcelItem,
 } from "@/lib/japan-parcel.functions";
-import { PARCEL_STATUS_OPTIONS } from "@/lib/japan-parcel.helpers";
+import { classifyItemsTariff } from "@/lib/tariff.functions";
+import {
+  PARCEL_STATUS_OPTIONS,
+  sumFreightDiffJpy,
+  sumTariffJpy,
+  computeItemTariffJpy,
+} from "@/lib/japan-parcel.helpers";
+import { TARIFF_CATEGORIES, tariffCategoryLabel, rateToPercent, getTariffCategory } from "@/lib/tariff";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +64,8 @@ type ItemRow = {
   pay_method: string | null;
   pay_at: string | null;
   notes: string | null;
+  tariff_category: string | null;
+  tariff_rate: number | null;
 };
 
 const EXCLUDED_KEYS = new Set([
@@ -109,6 +125,8 @@ export function ParcelEditPanel({
           pay_method: it.pay_method,
           pay_at: it.pay_at,
           notes: it.notes,
+          tariff_category: it.tariff_category,
+          tariff_rate: it.tariff_rate,
         },
       }),
     onSuccess: () => {
@@ -152,9 +170,31 @@ export function ParcelEditPanel({
 
   const items = (q.data?.items ?? []) as ItemRow[];
   const itemsTotalJpy = items.reduce((s, it) => s + (Number(it.item_total_jpy) || 0), 0);
+  const freightDiffJpy = sumFreightDiffJpy(items);
+  const tariffJpy = sumTariffJpy(items);
   const timeline =
     (q.data?.row as { status_timeline?: { at?: string | null; text?: string | null }[] } | undefined)
       ?.status_timeline ?? [];
+
+  const classify = useServerFn(classifyItemsTariff);
+  const classifyMut = useMutation({
+    mutationFn: () =>
+      classify({
+        data: {
+          items: items.map((it) => ({
+            id: it.id,
+            item_title: it.item_title,
+            item_title_cn: it.item_title_cn,
+          })),
+        },
+      }),
+    onSuccess: (r) => {
+      toast.success(`AI 已识别 ${r.updated}/${r.total} 个子订单类目`);
+      qc.invalidateQueries({ queryKey: ["jp-parcel", id] });
+      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
 
   const saveMut = useMutation({
     mutationFn: () => update({ data: { id, ...form } as never }),
@@ -264,6 +304,13 @@ export function ParcelEditPanel({
               <span>时间 {it.pay_at ? new Date(it.pay_at).toLocaleString() : "—"}</span>
               <span>商户单号 {it.merchant_order_no || "—"}</span>
             </div>
+            <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+              <span>类目 {tariffCategoryLabel(it.tariff_category)}</span>
+              <span>税率 {rateToPercent(it.tariff_rate)}</span>
+              <span>
+                关税 ≈ {it.tariff_rate ? `¥${computeItemTariffJpy(it).toLocaleString()}` : "—"}
+              </span>
+            </div>
           </div>
         </div>
       ))}
@@ -290,6 +337,16 @@ export function ParcelEditPanel({
             <Button
               variant="outline"
               size="sm"
+              onClick={() => classifyMut.mutate()}
+              disabled={classifyMut.isPending || items.length === 0}
+              title={items.length === 0 ? "无子订单" : "AI 识别每个子订单的关税类目"}
+            >
+              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              {classifyMut.isPending ? "识别中…" : "AI 识别关税类目"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 if (confirm("删除此订单？")) delMut.mutate();
               }}
@@ -313,6 +370,8 @@ export function ParcelEditPanel({
         onChange={setForm}
         itemsTotalJpy={itemsTotalJpy}
         itemsSlot={itemsSlot}
+        freightDiffJpy={freightDiffJpy}
+        tariffJpy={tariffJpy}
       />
 
       {timeline.length > 0 && (
@@ -458,6 +517,42 @@ function ItemEditForm({
           <ItemField label="手续费 JPY" type="number" value={value.service_fee_jpy} onChange={(v) => set("service_fee_jpy", v as number | null)} />
           <ItemField label="日本国内运费 JPY" type="number" value={value.domestic_freight_jpy} onChange={(v) => set("domestic_freight_jpy", v as number | null)} />
           <ItemField label="运费补差 JPY" type="number" value={value.freight_diff_jpy} onChange={(v) => set("freight_diff_jpy", v as number | null)} />
+        </div>
+      </section>
+      <section>
+        <h4 className="mb-2 text-xs font-semibold text-muted-foreground">④ 关税类目</h4>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs">类目（决定税率）</Label>
+            <Select
+              value={value.tariff_category ?? ""}
+              onValueChange={(v) => {
+                const cat = getTariffCategory(v);
+                onChange({
+                  ...value,
+                  tariff_category: v || null,
+                  tariff_rate: cat?.rate ?? null,
+                });
+              }}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="未识别" />
+              </SelectTrigger>
+              <SelectContent>
+                {TARIFF_CATEGORIES.map((c) => (
+                  <SelectItem key={c.key} value={c.key}>
+                    {c.label} · {Math.round(c.rate * 100)}%
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <ItemField
+            label="税率（自动）"
+            type="number"
+            value={value.tariff_rate}
+            onChange={(v) => set("tariff_rate", v as number | null)}
+          />
         </div>
       </section>
       <section>

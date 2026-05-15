@@ -10,7 +10,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ImageOff } from "lucide-react";
-import { simplifyStatus, SIMPLE_STATUS_LABEL } from "@/lib/japan-parcel.helpers";
+import {
+  simplifyStatus,
+  SIMPLE_STATUS_LABEL,
+  sumFreightDiffJpy,
+  sumTariffJpy,
+  computeItemTariffJpy,
+} from "@/lib/japan-parcel.helpers";
+import { tariffCategoryLabel, rateToPercent } from "@/lib/tariff";
 import { getJapanParcel } from "@/lib/japan-parcel.functions";
 import { ParcelEditPanel } from "./parcel-edit-panel";
 import { ParcelOverviewSections } from "./parcel-edit-sections";
@@ -39,6 +46,8 @@ export interface ParcelCardItem {
   pay_method?: string | null;
   pay_at?: string | null;
   notes?: string | null;
+  tariff_category?: string | null;
+  tariff_rate?: number | null;
 }
 
 export interface ParcelCardData {
@@ -94,6 +103,8 @@ export function ParcelCardDialog({
     (s, it) => s + (Number(it.item_total_jpy) || 0),
     0,
   );
+  const freightDiffJpy = sumFreightDiffJpy(fullItems);
+  const tariffJpy = sumTariffJpy(fullItems);
   const simple = simplifyStatus(parcel.status);
 
   return (
@@ -126,6 +137,8 @@ export function ParcelCardDialog({
               <ParcelOverviewSections
                 value={fullRow}
                 itemsTotalJpy={itemsTotalJpy}
+                freightDiffJpy={freightDiffJpy}
+                tariffJpy={tariffJpy}
                 itemsSlot={<OverviewItems items={fullItems} />}
               />
             )}
@@ -204,6 +217,14 @@ function OverviewItems({ items }: { items: ParcelCardItem[] }) {
             <Row label="手续费" v={fmtJpy(it.service_fee_jpy)} />
             <Row label="国内运费" v={fmtJpy(it.domestic_freight_jpy)} />
             <Row label="运费补差" v={fmtJpy(it.freight_diff_jpy)} />
+
+            <Separator />
+            <Row label="关税类目" v={tariffCategoryLabel(it.tariff_category)} />
+            <Row label="税率" v={rateToPercent(it.tariff_rate)} />
+            <Row
+              label="关税"
+              v={it.tariff_rate ? fmtJpy(computeItemTariffJpy(it)) : "—"}
+            />
 
             <Separator />
             <Row label="支付方式" v={it.pay_method || "—"} />
