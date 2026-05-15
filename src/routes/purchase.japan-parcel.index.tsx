@@ -182,16 +182,11 @@ function JapanParcelList() {
       }
     };
     // 等首屏渲染完再发翻译请求，避免抢占数据加载
-    const w = window as Window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-    };
-    const handle = w.requestIdleCallback
-      ? w.requestIdleCallback(() => void run(), { timeout: 2000 })
-      : window.setTimeout(() => void run(), 800);
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    const cic = (window as unknown as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback;
+    const handle = ric ? ric(() => void run(), { timeout: 2000 }) : window.setTimeout(() => void run(), 800);
     return () => {
-      const cancel = (window as unknown as { cancelIdleCallback?: (h: number) => void })
-        .cancelIdleCallback;
-      if (w.requestIdleCallback && cancel) cancel(handle);
+      if (ric && cic) cic(handle);
       else window.clearTimeout(handle);
     };
   }, [allRows, fnTranslate, fnSaveTitles, qc]);
