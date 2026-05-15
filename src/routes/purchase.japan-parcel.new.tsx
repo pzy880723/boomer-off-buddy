@@ -697,26 +697,27 @@ function NewParcelPage() {
               <span className="text-muted-foreground">+ 国际物流费</span>
               <span className="font-mono">{formatJpy(totals.intlTotalJpy)}</span>
             </div>
+            <div className="flex justify-between border-t pt-2 font-medium">
+              <span>= 日本侧合计 (JPY)</span>
+              <span className="font-mono">{formatJpy(totals.grandJpy)}</span>
+            </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">+ 关税（按子订单类目税率）</span>
+              <span className="text-muted-foreground">
+                + 关税（按子订单类目税率，国内付人民币）
+              </span>
               <span className="font-mono">
-                {formatJpy(totals.tariffJpy)}
-                {totals.tariffCny > 0 && (
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    (≈ {formatCny(totals.tariffCny)})
-                  </span>
-                )}
+                {totals.tariffCny > 0 ? formatCny(totals.tariffCny) : "—"}
+                <span className="ml-2 text-xs text-muted-foreground">
+                  (¥{totals.tariffJpy.toLocaleString()})
+                </span>
               </span>
             </div>
             <div className="mt-2 flex items-center justify-between border-t pt-2 text-base font-semibold">
-              <span>= 合计</span>
+              <span>= 合计应付</span>
               <span className="font-mono">
-                {formatJpy(totals.grandJpy)}
-                {totals.grandCny > 0 && (
-                  <span className="ml-2 text-sm text-muted-foreground">
-                    (≈ {formatCny(totals.grandCny)})
-                  </span>
-                )}
+                {totals.grandCny > 0
+                  ? formatCny(totals.grandCny)
+                  : formatJpy(totals.grandJpy)}
               </span>
             </div>
           </div>
