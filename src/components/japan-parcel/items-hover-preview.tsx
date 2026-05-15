@@ -54,6 +54,8 @@ export function ItemsHoverPreview({
                   <img
                     src={it!.item_image_url}
                     alt=""
+                    loading="lazy"
+                    decoding="async"
                     className="aspect-square w-full rounded object-cover"
                   />
                 ) : (
