@@ -175,24 +175,31 @@ export function ParcelEditPanel({
       ?.status_timeline ?? [];
 
   const classify = useServerFn(classifyItemsTariff);
-  const classifyMut = useMutation({
-    mutationFn: () =>
-      classify({
-        data: {
-          items: items.map((it) => ({
-            id: it.id,
-            item_title: it.item_title,
-            item_title_cn: it.item_title_cn,
-          })),
-        },
-      }),
-    onSuccess: (r) => {
-      toast.success(`AI 已识别 ${r.updated}/${r.total} 个子订单类目`);
-      qc.invalidateQueries({ queryKey: ["jp-parcel", id] });
-      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
+  const [autoClassified, setAutoClassified] = useState(false);
+  useEffect(() => {
+    if (autoClassified) return;
+    if (!q.data) return;
+    const missing = items.filter(
+      (it) => it.tariff_rate == null && (it.item_title || it.item_title_cn),
+    );
+    if (missing.length === 0) return;
+    setAutoClassified(true);
+    classify({
+      data: {
+        items: missing.map((it) => ({
+          id: it.id,
+          item_title: it.item_title,
+          item_title_cn: it.item_title_cn,
+        })),
+        persist: true,
+      },
+    })
+      .then(() => {
+        qc.invalidateQueries({ queryKey: ["jp-parcel", id] });
+        qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+      })
+      .catch((e) => toast.error(`关税分类失败：${(e as Error).message}`));
+  }, [autoClassified, q.data, items, classify, qc, id]);
 
   const saveMut = useMutation({
     mutationFn: () => update({ data: { id, ...form } as never }),
