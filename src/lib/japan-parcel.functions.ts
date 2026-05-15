@@ -86,12 +86,14 @@ export const listJapanParcels = createServerFn({ method: "GET" })
   )
   .handler(async ({ data }) => {
     // 列表只取首屏需要的列，剔除 raw_payload / status_timeline 等大字段，避免每行几十KB拖慢首屏
+    // 列表只取首屏渲染必要的列；详情由 getJapanParcel 单独拉
     let q = supabaseAdmin
       .from("japan_parcels")
       .select(
-        "id,source,source_order_no,tracking_no,status,completeness,item_title,item_title_cn,item_image_url,seller,category,total_jpy,total_cny,exchange_rate,intl_total_jpy,intl_total_cny,intl_freight_jpy,intl_reinforce_jpy,intl_merge_fee_jpy,intl_send_fee_jpy,intl_exchange_rate,tariff_jpy,tariff_cny,grand_total_jpy,grand_total_cny,purchased_at,received_at,weight_g,created_at, japan_parcel_items(id, sub_order_no, item_title, item_title_cn, item_image_url, item_total_jpy, item_total_cny, unit_price_jpy, quantity, weight_g, tariff_category, tariff_rate, freight_diff_jpy)",
+        "id,source,source_order_no,tracking_no,status,item_title,item_title_cn,item_image_url,total_jpy,intl_total_jpy,tariff_jpy,grand_total_jpy,grand_total_cny,purchased_at,created_at, japan_parcel_items(id, item_title, item_title_cn, item_image_url, item_total_jpy)",
       )
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(100);
     if (data.status?.length) q = q.in("status", data.status);
     if (data.source?.length) q = q.in("source", data.source);
     if (data.onlyIncomplete) q = q.lt("completeness", 80);
@@ -101,7 +103,7 @@ export const listJapanParcels = createServerFn({ method: "GET" })
         `item_title.ilike.${s},source_order_no.ilike.${s},tracking_no.ilike.${s},seller.ilike.${s},receiver_name.ilike.${s}`,
       );
     }
-    const { data: rows, error } = await q.limit(500);
+    const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
     return { rows: rows ?? [] };
   });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Plus,
@@ -61,6 +61,16 @@ import { ItemsHoverPreview } from "@/components/japan-parcel/items-hover-preview
 const buildListKey = (search: string, sources: string[]) =>
   ["jp-parcels", { search, sources }] as const;
 
+const listOptions = (search: string, sources: string[]) => ({
+  queryKey: buildListKey(search, sources),
+  queryFn: () =>
+    listJapanParcels({
+      data: { search, source: sources.length ? sources : undefined },
+    }),
+  staleTime: 60_000,
+  refetchOnWindowFocus: false,
+});
+
 export const Route = createFileRoute("/purchase/japan-parcel/")({
   head: () => ({
     meta: [
@@ -68,14 +78,7 @@ export const Route = createFileRoute("/purchase/japan-parcel/")({
       { name: "description", content: "Meruki / Yahoo / Mercari 小包裹订单管理" },
     ],
   }),
-  loader: ({ context }) => {
-    // 预取空筛选下的列表，让首屏跟着 SSR 一起到位
-    context.queryClient.ensureQueryData({
-      queryKey: buildListKey("", []),
-      queryFn: () => listJapanParcels({ data: {} }),
-      staleTime: 60_000,
-    });
-  },
+  loader: ({ context }) => context.queryClient.ensureQueryData(listOptions("", [])),
   component: JapanParcelList,
 });
 
@@ -119,21 +122,9 @@ function JapanParcelList() {
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
   const debouncedSearch = useDebounced(search, 300);
 
-  const queryKey = buildListKey(debouncedSearch, sources);
+  
 
-  const list = useQuery({
-    queryKey,
-    queryFn: () =>
-      fetchList({
-        data: {
-          search: debouncedSearch,
-          source: sources.length ? sources : undefined,
-        },
-      }),
-    placeholderData: (prev) => prev,
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
+  const list = useSuspenseQuery(listOptions(debouncedSearch, sources));
 
   type ListData = Awaited<ReturnType<typeof fetchList>>;
 
@@ -164,7 +155,7 @@ function JapanParcelList() {
       if (need.length >= 20) break;
     }
     if (need.length === 0) return;
-    (async () => {
+    const run = async () => {
       try {
         const r = await fnTranslate({ data: { titles: need.map((n) => n.jp) } });
         if (!r.ok) return;
@@ -173,7 +164,6 @@ function JapanParcelList() {
           .filter((u): u is { id: string; item_title_cn: string } => !!u.item_title_cn);
         if (updates.length === 0) return;
         await fnSaveTitles({ data: { updates } });
-        // 直接合并到现有缓存，避免再发一次列表请求
         const map = new Map(updates.map((u) => [u.id, u.item_title_cn]));
         qc.setQueriesData<ListData>({ queryKey: ["jp-parcels"] }, (data) => {
           if (!data) return data;
@@ -190,7 +180,15 @@ function JapanParcelList() {
       } catch {
         /* silent */
       }
-    })();
+    };
+    // 等首屏渲染完再发翻译请求，避免抢占数据加载
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    const cic = (window as unknown as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback;
+    const handle = ric ? ric(() => void run(), { timeout: 2000 }) : window.setTimeout(() => void run(), 800);
+    return () => {
+      if (ric && cic) cic(handle);
+      else window.clearTimeout(handle);
+    };
   }, [allRows, fnTranslate, fnSaveTitles, qc]);
 
   const statusMut = useMutation({
@@ -370,9 +368,7 @@ function JapanParcelList() {
 
       <Card>
         <CardContent className="p-0">
-          {list.isLoading ? (
-            <div className="p-10 text-center text-sm text-muted-foreground">加载中…</div>
-          ) : rows.length === 0 ? (
+          {rows.length === 0 ? (
             <EmptyState
               title="暂无小包裹订单"
               description="可以截图批量导入、单条 AI 识图，或手动新建。"

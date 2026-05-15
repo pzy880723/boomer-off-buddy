@@ -1,88 +1,83 @@
-## 目标
+## 现状诊断
 
-让"合计费用"自动计入 **关税** 与 **子订单运费补差**：
+数据本身只有 1 条包裹 + 2 条子订单，DB 查询不应该慢。"慢"主要来自请求链路和加载策略：
 
-1. AI 识别每个子订单的商品类目，归入三档行邮税率（13% / 20% / 50%）。
-2. 根据"商品费用 CNY"× 税率算出每个子订单的关税，汇总成包裹关税。
-3. 合计费用 = 商品总额 + 国际物流小计 + **Σ运费补差** + 关税。
-4. 子订单卡片与编辑面板显示类目与税率，并允许人工修正。
+1. **SSR loader 是 fire-and-forget**
+   `purchase.japan-parcel.index.tsx` 里：
+   ```ts
+   loader: ({ context }) => {
+     context.queryClient.ensureQueryData({...});  // 没 return、没 await
+   }
+   ```
+   结果是服务端不等数据就先把 HTML 吐出来，浏览器拿到的是"加载中…"骨架，之后还得再发一次 `_serverFn` 请求把数据拉回来。冷启动 worker + 一次往返 ≈ 1-3s 的"白屏感"。
 
-## 一、数据库
+2. **列表 query 仍然偏胖**
+   `select` 拼了 28 列父表 + 13 列子表，`limit 500`，且没分页；同时还有 `or(... ilike ...)` 搜索（`item_title / source_order_no / tracking_no / seller / receiver_name`）。当前虽然只 1 行无所谓，但等数据涨起来会线性变慢，并且这些搜索字段没有索引。
 
-新增两列（`japan_parcel_items`）：
+3. **进入列表后还会触发两次额外的 serverFn**
+   `useEffect` 里"懒翻译前 20 条缺中文标题的子订单"——会调用 `translateTitles` + `bulkSetItemTitlesCn`。即使数据已显示，UI 也会因为 `setQueriesData` 重渲染，看上去像"还在转"。
 
-```sql
-alter table public.japan_parcel_items
-  add column tariff_category text,        -- 'snack' / 'clothing' / 'cosmetics_high' 等枚举字符串
-  add column tariff_rate numeric;         -- 0.13 / 0.20 / 0.50（冗余存储，便于历史回溯）
-```
+4. **Router 预取与 Query 缓存重复计时**
+   `router.tsx` 设 `defaultPreloadStaleTime: 10_000`，而组件用的是 `useQuery` + `staleTime: 60_000`，loader 又自己设了 `staleTime: 60_000`。两套 SWR 叠加，preload 命中后还是会触发后台 refetch，肉眼能看到一次"刷新"。
 
-`japan_parcels.tariff_jpy` / `tariff_cny` 已存在，沿用作为汇总结果。
+## 优化方案
 
-## 二、税率字典（前后端共用）
+### A. 让首屏数据跟着 SSR 一起到（最大收益）
 
-新建 `src/lib/tariff.ts`：
-
-- `TARIFF_TIERS`：三档定义（rate + label + 颜色）。
-- `TARIFF_CATEGORIES`：约 20 个常见类目，每个含 `key / label / tier`，例如：
-  - 13%：零食 / 保健品 / 药品 / 书籍 / CD-DVD / 玩具手办 / 普通小家电 / 游戏机 / 电脑配件
-  - 20%：服装 / 鞋 / 包 / 普通手表 / 美容仪 / 数码相机 / 耳机 / 运动用品 / 文具
-  - 50%：化妆品护肤品（高档）/ 香水 / 烟酒 / 高档手表
-- `getTariffRate(category)` 工具函数。
-
-## 三、AI 识别 serverFn
-
-新建 `src/lib/tariff.functions.ts` 中 `classifyItemsTariff`：
-
-- 输入：`{ items: { id, item_title, item_title_cn }[] }`。
-- 走 Lovable AI Gateway `google/gemini-2.5-flash`，结构化输出 `[{id, category, rate, reason}]`，prompt 内嵌完整类目字典与三档税率说明，要求只能从枚举中选。
-- handler 内批量 `update japan_parcel_items set tariff_category, tariff_rate`。
-- 返回写入结果。
-
-## 四、关税与合计计算
-
-在 `src/lib/japan-parcel.helpers.ts` 加入纯函数：
+把 loader 改成"返回/await"形式，并把组件切成 `useSuspenseQuery`，这样：
+- 服务端就把首屏 JSON 序列化进 HTML，刷新即出，不再有"加载中…"。
+- 浏览器端不再多发一次 `_serverFn` 请求。
 
 ```ts
-computeItemTariffJpy(item)      // item_total_jpy * tariff_rate
-computeParcelTariff(items, rate) // 汇总 JPY + CNY
-computeParcelGrandTotal({
-  itemsTotalJpy, intlTotalJpy, freightDiffTotalJpy, tariffJpy, rate
-}) // 返回 {jpy, cny}
+// src/routes/purchase.japan-parcel.index.tsx
+const listOptions = (search: string, sources: string[]) => ({
+  queryKey: buildListKey(search, sources),
+  queryFn: () =>
+    listJapanParcels({
+      data: { search, source: sources.length ? sources : undefined },
+    }),
+  staleTime: 60_000,
+});
+
+export const Route = createFileRoute("/purchase/japan-parcel/")({
+  loader: ({ context }) =>
+    context.queryClient.ensureQueryData(listOptions("", [])),
+  component: JapanParcelList,
+});
+
+// 组件里：
+const list = useSuspenseQuery(listOptions(debouncedSearch, sources));
 ```
 
-`ParcelEditSections` 的"建议值"改为：
+同时把 `src/router.tsx` 的 `defaultPreloadStaleTime` 改回 `0`，让 Query 单独管"新鲜度"，避免双层缓存打架。
 
-```
-suggestedJpy = 商品总额 + 国际物流小计 + Σ运费补差 + 关税
-```
+### B. 收缩 list serverFn 的 payload
 
-并新增展示行"运费补差合计 / 关税合计"。
+把列表 `select` 再瘦身（首屏不需要的列移到详情接口里）：
+- 父表只保留：`id, source, source_order_no, tracking_no, status, item_title_cn, item_title, item_image_url, total_jpy, grand_total_jpy, grand_total_cny, tariff_jpy, intl_total_jpy, purchased_at`。
+- 子表只保留：`id, item_title, item_title_cn, item_image_url, item_total_jpy`。
+其余 `intl_*`、`weight_g`、`tariff_*` 这些只在详情/编辑页用，不在列表渲染。
 
-## 五、UI 改动
+加个分页/截断：默认 `limit 100`，等需要再说"加载更多"。
 
-1. **子订单卡片（编辑面板 + 概览）**
-   每行多一行：`类目: 玩具/手办  税率: 13%  关税 ≈ ¥xxx`。
-   类目可在编辑弹窗"① 商品"段下拉选择（来自 `TARIFF_CATEGORIES`），手动改后 `tariff_rate` 自动同步。
+### C. 把懒翻译延后，避免视觉抖动
 
-2. **包裹工具条**
-   "保存"旁加按钮 **"AI 识别关税类目"**：调用 `classifyItemsTariff` → 成功后 invalidate 查询。空结果时按钮 disable 并提示"无子订单"。
+- 用 `requestIdleCallback`(降级 `setTimeout(…, 800)`) 触发，且仅在列表真的有缺译条目时执行。
+- 翻译完成后用 `setQueriesData` 静默合并（已经是这样），但**只更新当前可见行**，不要一次性 20 条全打。
 
-3. **④ 合计费用** 段
-   - 增加只读行：`运费补差合计 ¥…`、`关税 ¥…（按子订单税率汇总）`。
-   - "使用建议值"按钮包含新公式结果，并把 `tariff_jpy` / `tariff_cny` 也写回 form。
+### D. 给搜索加索引（可选，数据起来再做）
 
-## 六、技术细节
+为 `japan_parcels.source_order_no / tracking_no` 建普通 btree 索引，`item_title` 用 trigram 索引（`pg_trgm`），让 `ilike '%xxx%'` 能走索引而不是顺序扫描。
 
-- 关税 CNY = 关税 JPY / `intl_exchange_rate`（与现有合计同源）。
-- 若某子订单没有 `tariff_rate`，关税按 0 计，UI 标灰显示"未识别"。
-- AI 识别只读取 `item_title` / `item_title_cn`，不发送图片，控制成本。
-- 运费补差合计取自 `Σ items[i].freight_diff_jpy`，与已有 `intl_total_jpy` 不重复（`intl_total_jpy` 为国际物流商汇总，补差是子订单层）。
-- `ItemUpdateSchema` 增加 `tariff_category` / `tariff_rate` 可选字段，编辑面板保存时一并提交。
-- 不动现有"新建包裹"识别管线；新包裹保存后用户点一次"AI 识别关税类目"即可。
+## 预期效果
 
-## 影响文件
+- 第一次打开：从"白屏 1-3s + 加载中骨架"变成 SSR 直出，**首屏即数据**。
+- 列表内切换/返回：命中 Query 缓存，**无网络请求、瞬开**。
+- 后续数据增长后，瘦 select + 索引保证不会线性变慢。
 
-- 新建：`src/lib/tariff.ts`、`src/lib/tariff.functions.ts`
-- 迁移：`japan_parcel_items` 加两列
-- 修改：`japan-parcel.functions.ts`（Schema + listJapanParcels select 增加 tariff_*）、`japan-parcel.helpers.ts`、`parcel-edit-sections.tsx`、`parcel-edit-panel.tsx`、`parcel-card-dialog.tsx`、`ItemEditForm`
+## 实施顺序
+
+1. 改 loader + 组件为 `useSuspenseQuery`，调整 `defaultPreloadStaleTime`（A）。
+2. 收窄 `listJapanParcels` 的 `select` 字段并加 `limit 100`（B）。
+3. 懒翻译挪到 idle 回调（C）。
+4. （可选）后续数据量上来再加索引（D）。
