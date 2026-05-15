@@ -51,6 +51,8 @@ import {
 import { useDebounced } from "@/hooks/use-debounced";
 import type { ParcelCardData, ParcelCardItem } from "@/components/japan-parcel/parcel-card-dialog";
 import { ItemsHoverPreview } from "@/components/japan-parcel/items-hover-preview";
+import { CurrencyToggle } from "@/components/japan-parcel/currency-toggle";
+import { useCurrencyDisplay } from "@/hooks/use-currency-display";
 
 const ParcelCardDialog = lazy(() =>
   import("@/components/japan-parcel/parcel-card-dialog").then((m) => ({
@@ -282,6 +284,11 @@ function JapanParcelList() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">币种</span>
+            <CurrencyToggle />
+          </div>
         </CardContent>
       </Card>
 
