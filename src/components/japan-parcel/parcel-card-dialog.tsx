@@ -10,7 +10,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ImageOff } from "lucide-react";
-import { simplifyStatus, SIMPLE_STATUS_LABEL } from "@/lib/japan-parcel.helpers";
+import {
+  simplifyStatus,
+  SIMPLE_STATUS_LABEL,
+  sumFreightDiffJpy,
+  sumTariffJpy,
+  computeItemTariffJpy,
+} from "@/lib/japan-parcel.helpers";
+import { tariffCategoryLabel, rateToPercent } from "@/lib/tariff";
 import { getJapanParcel } from "@/lib/japan-parcel.functions";
 import { ParcelEditPanel } from "./parcel-edit-panel";
 import { ParcelOverviewSections } from "./parcel-edit-sections";
@@ -96,6 +103,8 @@ export function ParcelCardDialog({
     (s, it) => s + (Number(it.item_total_jpy) || 0),
     0,
   );
+  const freightDiffJpy = sumFreightDiffJpy(fullItems);
+  const tariffJpy = sumTariffJpy(fullItems);
   const simple = simplifyStatus(parcel.status);
 
   return (
@@ -128,6 +137,8 @@ export function ParcelCardDialog({
               <ParcelOverviewSections
                 value={fullRow}
                 itemsTotalJpy={itemsTotalJpy}
+                freightDiffJpy={freightDiffJpy}
+                tariffJpy={tariffJpy}
                 itemsSlot={<OverviewItems items={fullItems} />}
               />
             )}
