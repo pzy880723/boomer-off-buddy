@@ -151,8 +151,8 @@ const emptyItem = (): SubItem => ({
   merchant_order_no: null,
 });
 
-// ====== Tariff (placeholder rule, configurable later) ======
-const TARIFF_RATE = 0; // 0% — 业务确认后再调整
+// 关税 = Σ(子订单 item_total_jpy * tariff_rate)，税率由 AI 分类后写入子订单
+
 
 // ====== Field component ======
 function F({
