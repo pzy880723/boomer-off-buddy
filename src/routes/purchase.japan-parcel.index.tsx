@@ -6,11 +6,13 @@ import {
   Plus,
   Search,
   Filter,
-  
   Trash2,
   Pencil,
   CheckCircle2,
   Package,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -35,7 +37,6 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import {
-  PARCEL_SOURCE_LABEL,
   simplifyStatus,
   SIMPLE_STATUS_LABEL,
   getDisplayTitle,
@@ -52,7 +53,10 @@ import { useDebounced } from "@/hooks/use-debounced";
 import type { ParcelCardData, ParcelCardItem } from "@/components/japan-parcel/parcel-card-dialog";
 import { ItemsHoverPreview } from "@/components/japan-parcel/items-hover-preview";
 import { CurrencyToggle } from "@/components/japan-parcel/currency-toggle";
+import { ViewModeToggle } from "@/components/japan-parcel/view-mode-toggle";
 import { useCurrencyDisplay } from "@/hooks/use-currency-display";
+import { useParcelViewMode } from "@/hooks/use-parcel-view-mode";
+import { cn } from "@/lib/utils";
 
 const ParcelCardDialog = lazy(() =>
   import("@/components/japan-parcel/parcel-card-dialog").then((m) => ({
@@ -60,15 +64,16 @@ const ParcelCardDialog = lazy(() =>
   })),
 );
 
-const buildListKey = (search: string, sources: string[]) =>
-  ["jp-parcels", { search, sources }] as const;
+type SortField = "intl_pay_at" | "grand_total_cny" | "created_at";
+type SortDir = "asc" | "desc";
+type SortState = { field: SortField; dir: SortDir };
 
-const listOptions = (search: string, sources: string[]) => ({
-  queryKey: buildListKey(search, sources),
-  queryFn: () =>
-    listJapanParcels({
-      data: { search, source: sources.length ? sources : undefined },
-    }),
+const buildListKey = (search: string, sort: SortState) =>
+  ["jp-parcels", { search, sort }] as const;
+
+const listOptions = (search: string, sort: SortState) => ({
+  queryKey: buildListKey(search, sort),
+  queryFn: () => listJapanParcels({ data: { search, sort } }),
   staleTime: 60_000,
   refetchOnWindowFocus: false,
 });
@@ -90,10 +95,13 @@ type ItemRow = {
   item_image_url: string | null;
   item_total_jpy: number | null;
   item_total_cny: number | null;
-  weight_g: number | null;
+  weight_g?: number | null;
   unit_price_jpy?: number | null;
   quantity?: number | null;
   sub_order_no?: string | null;
+  position?: number | null;
+  tariff_category?: string | null;
+  tariff_rate?: number | null;
 };
 
 type ParcelRow = ParcelCardData & {
@@ -103,6 +111,7 @@ type ParcelRow = ParcelCardData & {
   item_image_url: string | null;
   total_jpy: number | null;
   tariff_cny?: number | null;
+  intl_pay_at?: string | null;
   japan_parcel_items?: ItemRow[];
 };
 
@@ -119,14 +128,15 @@ function JapanParcelList() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<SimpleStatus[]>([]);
-  const [sources, setSources] = useState<string[]>([]);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
   const [currency] = useCurrencyDisplay();
+  const [viewMode] = useParcelViewMode();
+  const [sort, setSort] = useState<SortState>({ field: "intl_pay_at", dir: "desc" });
   const debouncedSearch = useDebounced(search, 300);
 
   const list = useQuery({
-    ...listOptions(debouncedSearch, sources),
+    ...listOptions(debouncedSearch, sort),
     placeholderData: (previousData) => previousData,
   });
 
@@ -139,6 +149,11 @@ function JapanParcelList() {
         : allRows,
     [allRows, statusFilter],
   );
+
+  const toggleSort = (field: SortField) =>
+    setSort((s) =>
+      s.field === field ? { field, dir: s.dir === "desc" ? "asc" : "desc" } : { field, dir: "desc" },
+    );
 
   const statusMut = useMutation({
     mutationFn: async (v: { id: string; status: SimpleStatus }) => {
@@ -174,8 +189,6 @@ function JapanParcelList() {
 
   const toggleStatusFilter = (s: SimpleStatus) =>
     setStatusFilter((arr) => (arr.includes(s) ? arr.filter((x) => x !== s) : [...arr, s]));
-  const toggleSource = (v: string) =>
-    setSources((arr) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]));
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -264,31 +277,15 @@ function JapanParcelList() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                来源 {sources.length ? `(${sources.length})` : ""}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {Object.entries(PARCEL_SOURCE_LABEL).map(([v, label]) => (
-                <DropdownMenuItem
-                  key={v}
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    toggleSource(v);
-                  }}
-                >
-                  <input type="checkbox" readOnly checked={sources.includes(v)} className="mr-2" />
-                  {label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">币种</span>
-            <CurrencyToggle />
+          <div className="ml-auto flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">展示</span>
+              <ViewModeToggle />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">币种</span>
+              <CurrencyToggle />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -329,49 +326,176 @@ function JapanParcelList() {
             <Table>
               <TableHeader>
                 <TableRow className="border-b bg-muted/30 hover:bg-muted/30">
-                  <TableHead className="w-[36px] text-center">
-                    <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="全选" />
-                  </TableHead>
+                  {viewMode === "parcel" && (
+                    <TableHead className="w-[36px] text-center">
+                      <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="全选" />
+                    </TableHead>
+                  )}
                   <TableHead className="w-[64px] text-center text-[11px] uppercase tracking-wider text-muted-foreground">图</TableHead>
-                  <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">订单 / 标题</TableHead>
-                  <TableHead className="w-[60px] text-center text-[11px] uppercase tracking-wider text-muted-foreground">子单</TableHead>
-                  <TableHead className="text-center text-[11px] uppercase tracking-wider text-muted-foreground">合计</TableHead>
-                  <TableHead className="text-center text-[11px] uppercase tracking-wider text-muted-foreground">采购时间</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    {viewMode === "parcel" ? "订单 / 标题" : "商品 / 所属包裹"}
+                  </TableHead>
+                  {viewMode === "parcel" ? (
+                    <TableHead className="w-[60px] text-center text-[11px] uppercase tracking-wider text-muted-foreground">子单</TableHead>
+                  ) : (
+                    <TableHead className="w-[80px] text-center text-[11px] uppercase tracking-wider text-muted-foreground">数量</TableHead>
+                  )}
+                  <TableHead className="text-center">
+                    <SortHeader
+                      label="合计"
+                      active={sort.field === "grand_total_cny"}
+                      dir={sort.dir}
+                      onClick={() => toggleSort("grand_total_cny")}
+                    />
+                  </TableHead>
+                  <TableHead className="text-center">
+                    <SortHeader
+                      label="支付时间"
+                      title="国际物流支付时间"
+                      active={sort.field === "intl_pay_at"}
+                      dir={sort.dir}
+                      onClick={() => toggleSort("intl_pay_at")}
+                    />
+                  </TableHead>
                   <TableHead className="w-[110px] text-center text-[11px] uppercase tracking-wider text-muted-foreground">状态</TableHead>
                   <TableHead className="w-[160px] text-center text-[11px] uppercase tracking-wider text-muted-foreground">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => {
+                {rows.flatMap((r) => {
                   const items = (r.japan_parcel_items ?? []) as ItemRow[];
                   const subCount = items.length;
                   const subSumJpy = items.reduce((s, it) => s + (Number(it.item_total_jpy) || 0), 0);
-                  // 日本侧 JPY 合计 = 商品 + 国际物流（关税不计入 JPY）
-                  const fallbackJpy =
-                    subSumJpy + (Number(r.intl_total_jpy) || 0);
+                  const fallbackJpy = subSumJpy + (Number(r.intl_total_jpy) || 0);
                   const totalJpy =
                     Number(r.grand_total_jpy) || fallbackJpy || Number(r.total_jpy) || 0;
-                  // CNY 合计 = JPY*汇率 + 关税CNY (汇率 = 1 JPY 对应的 CNY)
                   const rate = Number(r.intl_exchange_rate) || 0;
                   const tariffCny =
                     Number(r.tariff_cny) ||
                     (rate > 0 ? (Number(r.tariff_jpy) || 0) * rate : 0);
-                  const fallbackCny =
-                    rate > 0 ? totalJpy * rate + tariffCny : 0;
-                  const totalCny =
-                    Number(r.grand_total_cny) || fallbackCny || 0;
+                  const fallbackCny = rate > 0 ? totalJpy * rate + tariffCny : 0;
+                  const totalCny = Number(r.grand_total_cny) || fallbackCny || 0;
                   const title = getDisplayTitle(r, items);
                   const simple = simplifyStatus(r.status);
-                  return (
+                  const payAt = r.intl_pay_at ?? r.purchased_at ?? null;
+                  const payAtDisplay = payAt
+                    ? new Date(payAt).toLocaleString("zh-CN", {
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "—";
+                  const openCard = (tab: "overview" | "edit" = "overview") => {
+                    void import("@/components/japan-parcel/parcel-card-dialog");
+                    setOpenTab(tab);
+                    setOpenCardId(r.id);
+                  };
+
+                  if (viewMode === "item") {
+                    const sortedItems = [...items].sort(
+                      (a, b) => (Number(a.position) || 0) - (Number(b.position) || 0),
+                    );
+                    const displayItems: (ItemRow | null)[] = sortedItems.length ? sortedItems : [null];
+                    return displayItems.map((it, idx) => {
+                      const itJpy = it ? Number(it.item_total_jpy) || 0 : 0;
+                      const itCny = it
+                        ? Number(it.item_total_cny) || (rate > 0 ? itJpy * rate : 0)
+                        : 0;
+                      return (
+                        <TableRow
+                          key={`${r.id}-${it?.id ?? "empty"}-${idx}`}
+                          className="group cursor-pointer transition-colors hover:bg-muted/40"
+                          onClick={() => openCard("overview")}
+                        >
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            {it?.item_image_url ? (
+                              <img
+                                src={it.item_image_url}
+                                alt=""
+                                className="h-12 w-12 rounded object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="h-12 w-12 rounded bg-muted" />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="line-clamp-1 text-sm font-medium">
+                              {it?.item_title_cn || it?.item_title || title}
+                            </div>
+                            {it?.item_title_cn && it?.item_title && (
+                              <div className="line-clamp-1 text-[11px] text-muted-foreground">
+                                {it.item_title}
+                              </div>
+                            )}
+                            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <span>包裹 {r.source_order_no || r.id.slice(0, 8)}</span>
+                              {it?.tariff_category && (
+                                <span className="rounded bg-muted px-1 py-px text-[10px]">
+                                  {it.tariff_category}
+                                  {it.tariff_rate ? ` ${(Number(it.tariff_rate) * 100).toFixed(0)}%` : ""}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center text-sm tabular-nums">
+                            {it?.quantity ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {itJpy > 0 || itCny > 0 ? (
+                              <div className="space-y-0.5">
+                                {currency !== "cny" && itJpy > 0 && (
+                                  <div className="font-mono text-sm font-semibold tabular-nums">
+                                    ¥{itJpy.toLocaleString()}
+                                  </div>
+                                )}
+                                {currency !== "jpy" && itCny > 0 && (
+                                  <div className="font-mono text-sm font-semibold tabular-nums">
+                                    ￥{Math.round(itCny).toLocaleString()}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center text-xs text-muted-foreground tabular-nums">
+                            {payAtDisplay}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {simple === "delivered" ? (
+                              <Badge className="gap-1 bg-success/15 text-success hover:bg-success/20 border-0">
+                                <CheckCircle2 className="h-3 w-3" /> 已签收
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className="gap-1">
+                                <Package className="h-3 w-3" /> 已采购
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-[11px]"
+                              onClick={() => openCard("overview")}
+                            >
+                              打开包裹
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    });
+                  }
+
+                  return [
                     <TableRow
                       key={r.id}
                       data-state={selected.has(r.id) ? "selected" : undefined}
                       className="group cursor-pointer transition-colors hover:bg-muted/40"
-                      onClick={() => {
-                        void import("@/components/japan-parcel/parcel-card-dialog");
-                        setOpenTab("overview");
-                        setOpenCardId(r.id);
-                      }}
+                      onClick={() => openCard("overview")}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
@@ -388,18 +512,13 @@ function JapanParcelList() {
                             item_title_cn: it.item_title_cn,
                             item_image_url: it.item_image_url,
                           }))}
-                          onClick={() => {
-                            void import("@/components/japan-parcel/parcel-card-dialog");
-                            setOpenTab("overview");
-                            setOpenCardId(r.id);
-                          }}
+                          onClick={() => openCard("overview")}
                         />
                       </TableCell>
                       <TableCell>
                         <div className="line-clamp-1 text-sm font-medium">{title}</div>
                         <div className="mt-0.5 text-xs text-muted-foreground">
-                          {r.source_order_no || "—"} ·{" "}
-                          {PARCEL_SOURCE_LABEL[r.source as keyof typeof PARCEL_SOURCE_LABEL] ?? r.source}
+                          {r.source_order_no || "—"}
                         </div>
                       </TableCell>
                       <TableCell className="text-center text-sm">
@@ -434,8 +553,8 @@ function JapanParcelList() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground tabular-nums">
-                        {r.purchased_at ? new Date(r.purchased_at).toLocaleDateString() : "—"}
+                      <TableCell className="text-center text-xs text-muted-foreground tabular-nums">
+                        {payAtDisplay}
                       </TableCell>
                       <TableCell>
                         {simple === "delivered" ? (
@@ -480,11 +599,7 @@ function JapanParcelList() {
                             className="h-8 w-8"
                             aria-label="编辑"
                             title="编辑"
-                            onClick={() => {
-                              void import("@/components/japan-parcel/parcel-card-dialog");
-                              setOpenTab("edit");
-                              setOpenCardId(r.id);
-                            }}
+                            onClick={() => openCard("edit")}
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
@@ -503,8 +618,8 @@ function JapanParcelList() {
                           </Button>
                         </div>
                       </TableCell>
-                    </TableRow>
-                  );
+                    </TableRow>,
+                  ];
                 })}
               </TableBody>
             </Table>
@@ -526,3 +641,34 @@ function JapanParcelList() {
     </div>
   );
 }
+
+function SortHeader({
+  label,
+  title,
+  active,
+  dir,
+  onClick,
+}: {
+  label: string;
+  title?: string;
+  active: boolean;
+  dir: SortDir;
+  onClick: () => void;
+}) {
+  const Icon = active ? (dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={cn(
+        "inline-flex items-center gap-1 text-[11px] uppercase tracking-wider transition-colors",
+        active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {label}
+      <Icon className={cn("h-3 w-3", !active && "opacity-40")} />
+    </button>
+  );
+}
+
