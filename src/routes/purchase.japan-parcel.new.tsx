@@ -209,6 +209,7 @@ function NewParcelPage() {
   const fnExtractIntl = useServerFn(extractIntlFee);
   const fnExtractItem = useServerFn(extractSubItem);
   const fnTranslate = useServerFn(translateTitles);
+  const fnClassify = useServerFn(classifyItemsTariff);
 
   const [parcel, setParcel] = useState<ParcelInfo>(emptyParcel());
   const [intl, setIntl] = useState<IntlFee>(emptyIntl());
