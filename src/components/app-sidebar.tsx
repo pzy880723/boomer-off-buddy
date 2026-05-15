@@ -17,6 +17,7 @@ import {
   Users,
   Link2,
   Activity,
+  type LucideIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -48,7 +49,7 @@ type NavTo =
   | "/knowledge"
   | "/settings";
 
-const groups: { label: string; items: { title: string; url: NavTo; icon: typeof LayoutDashboard }[]; icon?: typeof Package }[] = [
+const groups: { label: string; items: { title: string; url: NavTo; icon: LucideIcon }[]; icon?: LucideIcon }[] = [
   {
     label: "总览",
     items: [{ title: "仪表盘", url: "/dashboard", icon: LayoutDashboard }],
