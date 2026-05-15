@@ -150,6 +150,18 @@ function segment(rawText: string): Segments {
     if (i >= 0) intlStart = i;
   }
 
+  // 单订单兜底：没有 "子订单：" 锚点时，用 "商品清单"/"费用明细" 作为唯一子订单起点
+  let singleItemStart = -1;
+  if (itemStarts.length === 0) {
+    for (let i = 0; i < lines.length; i++) {
+      if (/^(商品清单|费用明细)$/.test(lines[i])) {
+        singleItemStart = i;
+        break;
+      }
+    }
+    if (singleItemStart >= 0) itemStarts.push(singleItemStart);
+  }
+
   const parcelEnd =
     itemStarts.length > 0
       ? itemStarts[0]
