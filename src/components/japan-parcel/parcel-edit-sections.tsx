@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PARCEL_STATUS_OPTIONS } from "@/lib/japan-parcel.helpers";
+import { useCurrencyDisplay } from "@/hooks/use-currency-display";
 import type { ParcelFormValue } from "@/components/parcel-form";
 
 type FieldType = "text" | "number" | "datetime" | "textarea" | "select";
