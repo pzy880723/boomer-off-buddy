@@ -122,7 +122,7 @@ function JapanParcelList() {
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
   const debouncedSearch = useDebounced(search, 300);
 
-  const queryKey = buildListKey(debouncedSearch, sources);
+  
 
   const list = useSuspenseQuery(listOptions(debouncedSearch, sources));
 
