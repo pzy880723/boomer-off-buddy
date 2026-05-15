@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -18,9 +18,12 @@ import {
 } from "@/lib/japan-parcel.helpers";
 import { tariffCategoryLabel, rateToPercent } from "@/lib/tariff";
 import { getJapanParcel } from "@/lib/japan-parcel.functions";
-import { ParcelEditPanel } from "./parcel-edit-panel";
 import { ParcelOverviewSections } from "./parcel-edit-sections";
 import type { ParcelFormValue } from "@/components/parcel-form";
+
+const ParcelEditPanel = lazy(() =>
+  import("./parcel-edit-panel").then((m) => ({ default: m.ParcelEditPanel })),
+);
 
 export interface ParcelCardItem {
   id: string;
@@ -142,11 +145,15 @@ export function ParcelCardDialog({
           </TabsContent>
 
           <TabsContent value="edit" className="pt-3">
-            <ParcelEditPanel
-              parcelId={parcel.id}
-              compact
-              onDeleted={() => onOpenChange(false)}
-            />
+            {tab === "edit" && (
+              <Suspense fallback={<div className="py-10 text-center text-sm text-muted-foreground">正在加载编辑面板…</div>}>
+                <ParcelEditPanel
+                  parcelId={parcel.id}
+                  compact
+                  onDeleted={() => onOpenChange(false)}
+                />
+              </Suspense>
+            )}
           </TabsContent>
         </Tabs>
       </DialogContent>
