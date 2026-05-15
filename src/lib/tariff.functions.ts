@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { generateText, Output } from "ai";
+import { generateText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { TARIFF_CATEGORIES } from "./tariff";
