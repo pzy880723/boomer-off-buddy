@@ -354,16 +354,6 @@ export function ParcelEditPanel({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => classifyMut.mutate()}
-              disabled={classifyMut.isPending || items.length === 0}
-              title={items.length === 0 ? "无子订单" : "AI 识别每个子订单的关税类目"}
-            >
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              {classifyMut.isPending ? "识别中…" : "AI 关税类目"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
               onClick={() => {
                 if (confirm("删除此订单？")) delMut.mutate();
               }}
