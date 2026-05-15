@@ -310,7 +310,9 @@ function JapanParcelList() {
 
       <Card>
         <CardContent className="p-0">
-          {rows.length === 0 ? (
+          {list.isLoading && rows.length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">正在加载小包裹列表…</div>
+          ) : rows.length === 0 ? (
             <EmptyState
               title="暂无小包裹订单"
               description="可以单条 AI 识图，或手动新建。"
@@ -358,6 +360,7 @@ function JapanParcelList() {
                       data-state={selected.has(r.id) ? "selected" : undefined}
                       className="group cursor-pointer transition-colors hover:bg-muted/40"
                       onClick={() => {
+                        void import("@/components/japan-parcel/parcel-card-dialog");
                         setOpenTab("overview");
                         setOpenCardId(r.id);
                       }}
@@ -378,6 +381,7 @@ function JapanParcelList() {
                             item_image_url: it.item_image_url,
                           }))}
                           onClick={() => {
+                            void import("@/components/japan-parcel/parcel-card-dialog");
                             setOpenTab("overview");
                             setOpenCardId(r.id);
                           }}
@@ -467,6 +471,7 @@ function JapanParcelList() {
                             aria-label="编辑"
                             title="编辑"
                             onClick={() => {
+                              void import("@/components/japan-parcel/parcel-card-dialog");
                               setOpenTab("edit");
                               setOpenCardId(r.id);
                             }}
@@ -497,13 +502,17 @@ function JapanParcelList() {
         </CardContent>
       </Card>
 
-      <ParcelCardDialog
-        open={!!openCardId}
-        onOpenChange={(o) => !o && setOpenCardId(null)}
-        parcel={openParcel}
-        items={(openParcel?.japan_parcel_items ?? []) as ParcelCardItem[]}
-        defaultTab={openTab}
-      />
+      {openCardId && (
+        <Suspense fallback={null}>
+          <ParcelCardDialog
+            open={!!openCardId}
+            onOpenChange={(o) => !o && setOpenCardId(null)}
+            parcel={openParcel}
+            items={(openParcel?.japan_parcel_items ?? []) as ParcelCardItem[]}
+            defaultTab={openTab}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
