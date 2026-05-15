@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { generateText, Output } from "ai";
+import { generateText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { TARIFF_CATEGORIES } from "./tariff";
@@ -45,7 +45,7 @@ export const classifyItemsTariff = createServerFn({ method: "POST" })
         "X-Lovable-AIG-SDK": "vercel-ai-sdk",
       },
     });
-    const model = gateway("google/gemini-2.5-flash");
+    
 
     const dictText = TARIFF_CATEGORIES.map(
       (c) => `- ${c.key} (${c.label}, ${Math.round(c.rate * 100)}%)`,
@@ -70,17 +70,53 @@ ${dictText}
 - 不确定时选 other (20%)
 只返回字段 id 与 category，category 必须来自字典 key。`;
 
-    const { output } = await generateText({
-      model,
-      output: Output.object({ schema: OutputSchema }),
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: `请为以下子订单分类:\n${itemsText}` },
-      ],
-    });
+    const userPrompt = `请为以下子订单分类，仅返回 JSON，格式 {"results":[{"id":"...","category":"..."}]}，不要任何解释或 markdown：\n${itemsText}`;
+
+    async function callModel(modelId: string) {
+      const { text } = await generateText({
+        model: gateway(modelId),
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userPrompt },
+        ],
+      });
+      return text;
+    }
+
+    function extractJson(raw: string): unknown {
+      let s = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+      const start = s.search(/[\{\[]/);
+      const endChar = start !== -1 && s[start] === "[" ? "]" : "}";
+      const end = s.lastIndexOf(endChar);
+      if (start === -1 || end === -1) throw new Error("no json found");
+      s = s.substring(start, end + 1);
+      try {
+        return JSON.parse(s);
+      } catch {
+        s = s.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]").replace(/[\x00-\x1F\x7F]/g, "");
+        return JSON.parse(s);
+      }
+    }
+
+    let parsed: z.infer<typeof OutputSchema> | null = null;
+    let lastErr: unknown = null;
+    for (const modelId of ["google/gemini-2.5-flash", "google/gemini-2.5-pro"]) {
+      try {
+        const raw = await callModel(modelId);
+        const json = extractJson(raw);
+        const normalized = Array.isArray((json as { results?: unknown }).results)
+          ? json
+          : { results: Array.isArray(json) ? json : [] };
+        parsed = OutputSchema.parse(normalized);
+        break;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    if (!parsed) throw new Error(`AI 分类失败: ${(lastErr as Error)?.message ?? "unknown"}`);
 
     let updated = 0;
-    for (const r of output.results) {
+    for (const r of parsed.results) {
       const cat = TARIFF_CATEGORIES.find((c) => c.key === r.category);
       if (!cat) continue;
       const { error } = await supabaseAdmin
@@ -90,5 +126,5 @@ ${dictText}
       if (!error) updated++;
     }
 
-    return { ok: true, updated, total: data.items.length, results: output.results };
+    return { ok: true, updated, total: data.items.length, results: parsed.results };
   });
