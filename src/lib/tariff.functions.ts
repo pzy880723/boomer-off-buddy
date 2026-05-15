@@ -126,5 +126,5 @@ ${dictText}
       if (!error) updated++;
     }
 
-    return { ok: true, updated, total: data.items.length, results: output.results };
+    return { ok: true, updated, total: data.items.length, results: parsed.results };
   });
