@@ -224,8 +224,10 @@ export function ParcelEditSections({
                 const next: ParcelFormValue = {
                   ...value,
                   grand_total_jpy: suggestedJpy,
+                  tariff_jpy: tariffJpy,
                 };
                 if (suggestedCny != null) next.grand_total_cny = suggestedCny;
+                if (tariffCny != null) next.tariff_cny = tariffCny;
                 onChange(next);
               }}
             >
@@ -235,7 +237,7 @@ export function ParcelEditSections({
         }
       >
         <FieldGrid fields={TOTAL_FIELDS} value={value} onChange={set} />
-        <div className="mt-3 grid grid-cols-3 gap-3 rounded-md bg-muted/30 p-3 text-xs">
+        <div className="mt-3 grid grid-cols-2 gap-3 rounded-md bg-muted/30 p-3 text-xs sm:grid-cols-4">
           <div>
             <div className="text-muted-foreground">商品总额</div>
             <div className="mt-0.5 font-mono">¥{itemsTotalJpy.toLocaleString()}</div>
@@ -245,8 +247,12 @@ export function ParcelEditSections({
             <div className="mt-0.5 font-mono">¥{intlTotal.toLocaleString()}</div>
           </div>
           <div>
-            <div className="text-muted-foreground">关税</div>
-            <div className="mt-0.5 font-mono">¥{tariff.toLocaleString()}</div>
+            <div className="text-muted-foreground">运费补差合计</div>
+            <div className="mt-0.5 font-mono">¥{freightDiffJpy.toLocaleString()}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">关税（按子订单税率）</div>
+            <div className="mt-0.5 font-mono">¥{tariffJpy.toLocaleString()}</div>
           </div>
         </div>
       </Section>
