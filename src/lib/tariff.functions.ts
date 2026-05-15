@@ -8,7 +8,7 @@ import { TARIFF_CATEGORIES } from "./tariff";
 const CATEGORY_KEYS = TARIFF_CATEGORIES.map((c) => c.key) as [string, ...string[]];
 
 const ResultItemSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1),
   category: z.enum(CATEGORY_KEYS),
 });
 
