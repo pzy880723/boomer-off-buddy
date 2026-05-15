@@ -432,15 +432,20 @@ function NewParcelPage() {
     const intlTotalJpy = Number(intl.intl_total_jpy) || 0;
     const tariffJpy = sumTariffJpy(items);
     const rate = Number(intl.intl_exchange_rate) || 0;
-    const { jpy: grandJpy, cny } = computeGrandTotal({
+    const { jpy: grandJpy, cny: grandCny, tariffCny } = computeGrandTotal({
       itemsTotalJpy,
       intlTotalJpy,
       tariffJpy,
       exchangeRate: rate,
     });
-    const grandCny = cny ?? 0;
-    const tariffCny = rate > 0 ? Math.round((tariffJpy / rate) * 100) / 100 : 0;
-    return { itemsTotalJpy, intlTotalJpy, tariffJpy, grandJpy, grandCny, tariffCny };
+    return {
+      itemsTotalJpy,
+      intlTotalJpy,
+      tariffJpy,
+      grandJpy,
+      grandCny: grandCny ?? 0,
+      tariffCny: tariffCny ?? 0,
+    };
   }, [items, intl.intl_total_jpy, intl.intl_exchange_rate]);
 
   // ====== Save ======
