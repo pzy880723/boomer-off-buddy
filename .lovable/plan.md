@@ -1,67 +1,97 @@
-## 为什么慢
+我查了当前页面切换链路，问题不是你电脑或单个按钮，而是前面技术线路确实有几处用法让页面切换被拖慢：列表页 loader 等后端数据、路由文件没有真正拆干净、列表首屏提前加载了详情/编辑/AI/翻译相关模块，导致“返回列表”和“新建包裹”都像在重新加载一堆东西。
 
-点击"新建包裹"后，浏览器要现下载并解析这个路由的 chunk，再渲染。它现在很重：
+## 发现的主要问题
 
-- `src/routes/purchase.japan-parcel.new.tsx`：792 行
-- 顶层一次性 import 了：
-  - 5 个 server function 模块（`recognize.functions` 621 行 / `tariff.functions` / `translate.functions` / `japan-parcel.functions` 等），每个都带 zod schema + prompt 文本
-  - `ScreenshotDropzone`、`RecognizeTimeline`、`ItemImageUploader`、`Tabs`、`Select` 等只在"智能识别"面板里才用得到的组件
-- 路由没有 loader（数据不是瓶颈），慢的 100% 是 JS 下载 + 解析
-- 列表页的"新建包裹"按钮虽然在 router 里开了 `defaultPreload: "intent"`，但用户直接点（没 hover）就吃不到预加载红利
+1. **返回列表慢的直接原因**
+   - `/purchase/japan-parcel` 路由有 loader，切回列表时会等 `listJapanParcels` 完成。
+   - 实测这次列表请求约 **1.39s**，所以返回不是纯前端瞬间切换。
+   - 当前 router 还设置了 `defaultPendingMs: 800`，会让部分切换至少等一段时间才显示 pending/新页面，体感更慢。
 
-## 优化方案
+2. **列表页首屏太重**
+   - 列表页一打开就导入了 `ParcelCardDialog`，而它又导入 `ParcelEditPanel`。
+   - `ParcelEditPanel` 又导入详情查询、编辑、删除、关税分类、完整表单区块等。
+   - 这些本来应该“点击某个包裹详情/编辑时再加载”，现在却被列表页首屏带上了。
 
-只动前端结构与按需加载，不改业务逻辑。
+3. **按钮导航不统一**
+   - 有些按钮用 `<Link>`，有些用 `useNavigate()`。
+   - 像“返回”这种普通页面跳转应该用 `<Link>`，这样浏览器有 href、路由可以预加载、交互也更稳定。
 
-### 1. 路由级代码分割（最大收益）
+4. **新建页仍然偏重**
+   - 虽然 AI 识别面板已经懒加载了，但新建页本身仍然包含大量表单、图片上传、创建 server function、子订单表单逻辑。
+   - 这可以继续拆成“轻壳 + 表单主体懒加载 + AI 面板懒加载”。
 
-新增 `src/routes/purchase.japan-parcel.new.lazy.tsx`，把 `NewParcelPage` 主体迁过去，用 TanStack Router 的 lazy 路由：
+5. **侧边栏所有页面导航缺少主动预热**
+   - 侧边栏链接现在只是普通 Link，没有在鼠标进入/按下时统一 preload。
+   - 所有页面切换都会等当前目标页面 chunk 和数据开始加载。
 
-```tsx
-// purchase.japan-parcel.new.tsx —— 只留壳
-export const Route = createFileRoute("/purchase/japan-parcel/new")({
-  head: () => ({ meta: [{ title: "新建小包裹 · BOOMER OFF" }] }),
-});
+6. **详情/弹窗有重复加载风险**
+   - 列表行点击打开弹窗后，会再查一次详情。
+   - 编辑面板加载后还可能自动跑关税分类，进一步占用后端和前端资源。
+   - 这类动作应该延后到真正进入“编辑”或明确需要时执行，不能影响列表浏览和返回。
 
-// purchase.japan-parcel.new.lazy.tsx
-export const Route = createLazyFileRoute("/purchase/japan-parcel/new")({
-  component: NewParcelPage,
-});
-```
+## 调整技术线路
 
-效果：路由匹配立即出现外壳，主 chunk 异步下载。
+### 1. 页面跳转全部改成“轻路由 + 后加载数据”
+- 列表页取消阻塞式 loader，不再因为数据请求卡住页面切换。
+- 进入列表时先立即显示页面骨架/缓存数据，再异步刷新列表。
+- 保留 React Query 缓存，让返回列表优先显示上一次数据。
 
-### 2. 智能识别面板按需加载
+### 2. 路由级拆分
+- 对主要页面使用 `.lazy.tsx` 手动拆分，避免路由树一次性拉太多页面代码。
+- 优先拆这些页面：
+  - `/dashboard`
+  - `/purchase/japan-parcel`
+  - `/purchase/japan-parcel/new`
+  - `/purchase/japan-parcel/$id`
+  - 库存、门店、设置等侧边栏页面
 
-把"智能识别"那块（含 `ScreenshotDropzone` / `RecognizeTimeline` / 所有 5 个识别相关 server function 的 import）抽成 `SmartRecognizePanel.tsx`，在主页面用 `React.lazy` + `Suspense` 包裹，默认折叠未渲染时不下载。
+### 3. 日本小包裹列表页瘦身
+- 列表页只保留：搜索、筛选、表格、状态切换、基础操作。
+- `ParcelCardDialog` 改为点击行后 lazy import。
+- `ParcelEditPanel` 只在切到“编辑”标签时再加载。
+- 翻译、关税分类等 AI/后端动作不再跟随列表首屏自动加载。
 
-这能让用户上来直接看到"手动新建"表单，识别相关 ~700 行代码 + prompt 文本完全不进入首屏 chunk。
+### 4. 新建包裹页继续拆轻
+- `/new` 首屏只加载头部、返回/保存按钮、基础容器。
+- 表单主体拆到独立组件懒加载。
+- 图片上传组件只在子订单表单区域真正出现时加载。
+- 智能识别面板继续保持按需加载。
 
-### 3. server function client 桩按需 import
+### 5. 所有导航按钮统一规范
+- 页面跳转按钮全部优先使用 `<Link>`，不用 `button + useNavigate` 做普通跳转。
+- 保存成功、删除成功这类业务完成后的跳转才保留 `useNavigate()`。
+- 侧边栏、返回、新建、详情返回等全部加统一 `preload="intent"` 和 pointer down 预加载。
 
-`recognize.functions.ts` 在前端虽然只生成 RPC 桩，但它顶部的 zod schema + 文本 prompt 也会被打包。把这些 import 收进 `SmartRecognizePanel`，主页面不再引用即可一同 tree-shake。
+### 6. Router 参数优化
+- 调低/移除当前影响体感的 pending 延迟设置。
+- 保持数据缓存，避免返回页面时重复等待。
+- 让页面先显示已有缓存，再后台刷新。
 
-### 4. 触发更早的预下载
+### 7. 图片与列表渲染优化
+- 列表图片只显示小缩略图，避免加载原始大图。
+- hover 预览里的图片继续 lazy loading，必要时限制尺寸。
+- 列表行组件拆小并 memo，减少筛选、选择、状态变化时整表重渲染。
 
-`src/routes/purchase.japan-parcel.index.tsx` 的"新建包裹"按钮加上 `onMouseDown` / `onPointerDown` 调 `router.preloadRoute({ to: "/purchase/japan-parcel/new" })`，覆盖"直接 click 不经 hover"的场景，让 mousedown 到 click 这十几毫秒就开始下载。
+## 实施顺序
 
-### 5. 顺手清掉无用 import
+1. **先修日本小包裹返回/新建这条最痛链路**
+   - 改返回按钮为 Link。
+   - 取消列表 loader 阻塞。
+   - 懒加载弹窗和编辑面板。
+   - 调整 router pending 参数。
 
-新建页 `Tabs/TabsContent/...` 等组件如果只在智能识别区使用，会随 #2 一起移走，主壳不再依赖。
+2. **再修全站侧边栏和普通页面按钮**
+   - 统一导航写法。
+   - 给侧边栏和顶部面包屑/返回按钮加预加载。
 
-## 文件改动
+3. **最后做全站路由拆分**
+   - 把主要路由改为 `.lazy.tsx`。
+   - 确保首屏不再一次性下载无关页面代码。
 
-- 新建 `src/routes/purchase.japan-parcel.new.lazy.tsx`
-- 改写 `src/routes/purchase.japan-parcel.new.tsx`（仅保留 Route 定义 + head）
-- 新建 `src/components/japan-parcel/smart-recognize-panel.tsx`
-- 编辑 `src/routes/purchase.japan-parcel.index.tsx`（按钮加 preloadRoute）
-
-## 不动的部分
-
-- 业务逻辑（识别管线、关税计算、提交逻辑）原样迁移，不改算法
-- server function 实现文件本身不动
-- 列表页其它部分不动
-
-## 预期效果
-
-首次点击时下载的 JS 体积大幅减少（粗估 -60% 以上），路由壳和手动表单几乎瞬开；智能识别面板首次展开时再加载剩余代码，体感等待从"卡很久白屏"变成"几乎即点即开"。
+4. **验证**
+   - 用浏览器性能工具分别测：
+     - 列表 → 新建
+     - 新建 → 返回列表
+     - 侧边栏页面切换
+     - 列表行打开详情/编辑
+   - 验收目标：已缓存页面返回应接近瞬间；首次进入列表不再被后端请求完全卡住；普通按钮 INP 控制在良好范围。
