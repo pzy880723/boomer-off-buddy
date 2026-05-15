@@ -105,19 +105,26 @@ export function sumFreightDiffJpy(items: TariffItemLike[]): number {
   return items.reduce((s, it) => s + (Number(it.freight_diff_jpy) || 0), 0);
 }
 
+/**
+ * 合计口径：
+ *  - 日本侧（JPY）: 商品 + 国际物流（关税不在日本支付，不进 JPY 合计）
+ *  - 国内合计（CNY）= JPY 合计 / 汇率 + 关税 CNY（关税单独换算成人民币加进来）
+ */
 export function computeGrandTotal(opts: {
   itemsTotalJpy: number;
   intlTotalJpy: number;
   tariffJpy: number;
   exchangeRate?: number | null;
-}): { jpy: number; cny: number | null } {
-  const jpy =
-    (opts.itemsTotalJpy || 0) +
-    (opts.intlTotalJpy || 0) +
-    (opts.tariffJpy || 0);
+}): { jpy: number; cny: number | null; tariffCny: number | null } {
+  const jpy = (opts.itemsTotalJpy || 0) + (opts.intlTotalJpy || 0);
   const r = Number(opts.exchangeRate) || 0;
-  const cny = r > 0 ? Math.round((jpy / r) * 100) / 100 : null;
-  return { jpy, cny };
+  const tariffCny =
+    r > 0 ? Math.round(((opts.tariffJpy || 0) / r) * 100) / 100 : null;
+  const cny =
+    r > 0
+      ? Math.round((jpy / r + (tariffCny ?? 0)) * 100) / 100
+      : null;
+  return { jpy, cny, tariffCny };
 }
 
 // ===== UI 简化状态：仅「已采购 / 已签收」两档 =====
