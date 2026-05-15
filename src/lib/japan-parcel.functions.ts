@@ -83,17 +83,23 @@ const ItemCreateSchema = z.object({
 
 export const listJapanParcels = createServerFn({ method: "GET" })
   .inputValidator(
-    (input: { search?: string; status?: string[]; source?: string[]; onlyIncomplete?: boolean }) =>
-      input ?? {},
+    (input: {
+      search?: string;
+      status?: string[];
+      source?: string[];
+      onlyIncomplete?: boolean;
+      sort?: { field?: "intl_pay_at" | "grand_total_cny" | "created_at"; dir?: "asc" | "desc" };
+    }) => input ?? {},
   )
   .handler(async ({ data }) => {
-    // 列表只取首屏需要的列，剔除 raw_payload / status_timeline 等大字段，避免每行几十KB拖慢首屏
-    // 列表只取首屏渲染必要的列；详情由 getJapanParcel 单独拉
+    const sortField = data.sort?.field ?? "intl_pay_at";
+    const sortDir = data.sort?.dir ?? "desc";
     let q = supabaseAdmin
       .from("japan_parcels")
       .select(
-        "id,source,source_order_no,tracking_no,status,item_title,item_title_cn,item_image_url,total_jpy,intl_total_jpy,intl_exchange_rate,tariff_jpy,tariff_cny,grand_total_jpy,grand_total_cny,purchased_at,created_at, japan_parcel_items(id, item_title, item_title_cn, item_image_url, item_total_jpy, freight_diff_jpy)",
+        "id,source,source_order_no,tracking_no,status,item_title,item_title_cn,item_image_url,total_jpy,intl_total_jpy,intl_exchange_rate,intl_pay_at,tariff_jpy,tariff_cny,grand_total_jpy,grand_total_cny,purchased_at,created_at, japan_parcel_items(id, item_title, item_title_cn, item_image_url, item_total_jpy, item_total_cny, unit_price_jpy, quantity, sub_order_no, position, tariff_category, tariff_rate, freight_diff_jpy)",
       )
+      .order(sortField, { ascending: sortDir === "asc", nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(100);
     if (data.status?.length) q = q.in("status", data.status);
