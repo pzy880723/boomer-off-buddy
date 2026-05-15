@@ -125,6 +125,8 @@ export function ParcelEditPanel({
           pay_method: it.pay_method,
           pay_at: it.pay_at,
           notes: it.notes,
+          tariff_category: it.tariff_category,
+          tariff_rate: it.tariff_rate,
         },
       }),
     onSuccess: () => {
@@ -168,9 +170,31 @@ export function ParcelEditPanel({
 
   const items = (q.data?.items ?? []) as ItemRow[];
   const itemsTotalJpy = items.reduce((s, it) => s + (Number(it.item_total_jpy) || 0), 0);
+  const freightDiffJpy = sumFreightDiffJpy(items);
+  const tariffJpy = sumTariffJpy(items);
   const timeline =
     (q.data?.row as { status_timeline?: { at?: string | null; text?: string | null }[] } | undefined)
       ?.status_timeline ?? [];
+
+  const classify = useServerFn(classifyItemsTariff);
+  const classifyMut = useMutation({
+    mutationFn: () =>
+      classify({
+        data: {
+          items: items.map((it) => ({
+            id: it.id,
+            item_title: it.item_title,
+            item_title_cn: it.item_title_cn,
+          })),
+        },
+      }),
+    onSuccess: (r) => {
+      toast.success(`AI 已识别 ${r.updated}/${r.total} 个子订单类目`);
+      qc.invalidateQueries({ queryKey: ["jp-parcel", id] });
+      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
 
   const saveMut = useMutation({
     mutationFn: () => update({ data: { id, ...form } as never }),
