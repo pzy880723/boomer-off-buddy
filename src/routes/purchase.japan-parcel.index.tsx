@@ -394,13 +394,20 @@ function JapanParcelList() {
                   const items = (r.japan_parcel_items ?? []) as ItemRow[];
                   const subCount = items.length;
                   const subSumJpy = items.reduce((s, it) => s + (Number(it.item_total_jpy) || 0), 0);
+                  // 日本侧 JPY 合计 = 商品 + 国际物流（关税不计入 JPY）
+                  const fallbackJpy =
+                    subSumJpy + (Number(r.intl_total_jpy) || 0);
                   const totalJpy =
-                    Number(r.grand_total_jpy) ||
-                    subSumJpy +
-                      (Number(r.intl_total_jpy) || 0) +
-                      (Number(r.tariff_jpy) || 0) ||
-                    Number(r.total_jpy) ||
-                    0;
+                    Number(r.grand_total_jpy) || fallbackJpy || Number(r.total_jpy) || 0;
+                  // CNY 合计 = JPY/汇率 + 关税CNY
+                  const rate = Number(r.intl_exchange_rate) || 0;
+                  const tariffCny =
+                    Number(r.tariff_cny) ||
+                    (rate > 0 ? (Number(r.tariff_jpy) || 0) / rate : 0);
+                  const fallbackCny =
+                    rate > 0 ? totalJpy / rate + tariffCny : 0;
+                  const totalCny =
+                    Number(r.grand_total_cny) || fallbackCny || 0;
                   const title = getDisplayTitle(r, items);
                   const simple = simplifyStatus(r.status);
                   return (
