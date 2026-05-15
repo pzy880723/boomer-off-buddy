@@ -304,6 +304,13 @@ export function ParcelEditPanel({
               <span>时间 {it.pay_at ? new Date(it.pay_at).toLocaleString() : "—"}</span>
               <span>商户单号 {it.merchant_order_no || "—"}</span>
             </div>
+            <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+              <span>类目 {tariffCategoryLabel(it.tariff_category)}</span>
+              <span>税率 {rateToPercent(it.tariff_rate)}</span>
+              <span>
+                关税 ≈ {it.tariff_rate ? `¥${computeItemTariffJpy(it).toLocaleString()}` : "—"}
+              </span>
+            </div>
           </div>
         </div>
       ))}
@@ -330,6 +337,16 @@ export function ParcelEditPanel({
             <Button
               variant="outline"
               size="sm"
+              onClick={() => classifyMut.mutate()}
+              disabled={classifyMut.isPending || items.length === 0}
+              title={items.length === 0 ? "无子订单" : "AI 识别每个子订单的关税类目"}
+            >
+              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              {classifyMut.isPending ? "识别中…" : "AI 识别关税类目"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 if (confirm("删除此订单？")) delMut.mutate();
               }}
@@ -353,6 +370,8 @@ export function ParcelEditPanel({
         onChange={setForm}
         itemsTotalJpy={itemsTotalJpy}
         itemsSlot={itemsSlot}
+        freightDiffJpy={freightDiffJpy}
+        tariffJpy={tariffJpy}
       />
 
       {timeline.length > 0 && (
