@@ -219,6 +219,14 @@ function OverviewItems({ items }: { items: ParcelCardItem[] }) {
             <Row label="运费补差" v={fmtJpy(it.freight_diff_jpy)} />
 
             <Separator />
+            <Row label="关税类目" v={tariffCategoryLabel(it.tariff_category)} />
+            <Row label="税率" v={rateToPercent(it.tariff_rate)} />
+            <Row
+              label="关税"
+              v={it.tariff_rate ? fmtJpy(computeItemTariffJpy(it)) : "—"}
+            />
+
+            <Separator />
             <Row label="支付方式" v={it.pay_method || "—"} />
             <Row
               label="支付时间"
