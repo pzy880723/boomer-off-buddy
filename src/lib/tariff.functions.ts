@@ -118,10 +118,12 @@ ${dictText}
 
     const persist = data.persist !== false;
     let updated = 0;
+    const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
     if (persist) {
       for (const r of parsed.results) {
         const cat = TARIFF_CATEGORIES.find((c) => c.key === r.category);
         if (!cat) continue;
+        if (!UUID_RE.test(r.id)) continue; // skip non-DB ids (e.g. 新建页临时 id)
         const { error } = await supabaseAdmin
           .from("japan_parcel_items")
           .update({ tariff_category: cat.key, tariff_rate: cat.rate })
