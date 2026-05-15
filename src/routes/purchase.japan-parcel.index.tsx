@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -107,6 +107,7 @@ type ParcelRow = ParcelCardData & {
 
 function JapanParcelList() {
   const qc = useQueryClient();
+  const router = useRouter();
   const fetchList = useServerFn(listJapanParcels);
   const updateStatus = useServerFn(updateJapanParcelStatus);
   const updateParcel = useServerFn(updateJapanParcel);
@@ -269,7 +270,11 @@ function JapanParcelList() {
         description="AI 识图 · 手动录入 · 状态人工维护"
         actions={
           <Button asChild size="sm" className="bg-gradient-brand hover:opacity-90">
-            <Link to="/purchase/japan-parcel/new">
+            <Link
+              to="/purchase/japan-parcel/new"
+              onMouseEnter={() => router.preloadRoute({ to: "/purchase/japan-parcel/new" })}
+              onPointerDown={() => router.preloadRoute({ to: "/purchase/japan-parcel/new" })}
+            >
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               新建包裹
             </Link>

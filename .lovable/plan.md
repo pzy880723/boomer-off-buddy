@@ -1,41 +1,67 @@
-# 关税自动化 + 清理列表入口 + 表头居中
+## 为什么慢
 
-## 1. 关税自动计算（去掉手动按钮）
+点击"新建包裹"后，浏览器要现下载并解析这个路由的 chunk，再渲染。它现在很重：
 
-### 1.1 改造 `src/lib/tariff.functions.ts`
-- 入参 `id` 由 `z.string().uuid()` 改为 `z.string()`，并新增可选字段 `persist: z.boolean().optional()`（默认 `true`，保持旧行为）。
-- `persist === false` 时跳过 `supabaseAdmin.update(...)`，仅返回 `results`（id → category）。
-- 这样新建页（item 还没入库，id 是本地临时 uuid）也能复用同一个 serverFn。
+- `src/routes/purchase.japan-parcel.new.tsx`：792 行
+- 顶层一次性 import 了：
+  - 5 个 server function 模块（`recognize.functions` 621 行 / `tariff.functions` / `translate.functions` / `japan-parcel.functions` 等），每个都带 zod schema + prompt 文本
+  - `ScreenshotDropzone`、`RecognizeTimeline`、`ItemImageUploader`、`Tabs`、`Select` 等只在"智能识别"面板里才用得到的组件
+- 路由没有 loader（数据不是瓶颈），慢的 100% 是 JS 下载 + 解析
+- 列表页的"新建包裹"按钮虽然在 router 里开了 `defaultPreload: "intent"`，但用户直接点（没 hover）就吃不到预加载红利
 
-### 1.2 新建包裹页 `src/routes/purchase.japan-parcel.new.tsx`
-- 在 AI 识别管线 **最后一步**（Recognize 完成后、或 `setItems(validItems)` 之后）追加一个自动步骤："关税分类"：
-  - 调用 `classifyItemsTariff({ items, persist: false })`。
-  - 用返回的 `results` 把每个子订单的 `tariff_category` / `tariff_rate` 写回 `items` 内存数组。
-  - RecognizeTimeline 增加一条 step（status: running → done / error，error 静默失败不阻断保存）。
-- 用户手动新增/编辑子订单标题时，**不再实时调 AI**，避免噪音；只在"识别完成后"自动跑一次。
-- 用户也可以在子订单卡片里手动改类目（沿用现有下拉，无需新增 UI）。
-- 保存时 `tariffJpy / tariffCny` 已经因为 `items[].tariff_rate` 自动得到正确值，无需改 totals 逻辑。
+## 优化方案
 
-### 1.3 详情/编辑页 `src/components/japan-parcel/parcel-edit-panel.tsx`
-- 删除 "AI 关税类目" 按钮（约 354–363 行那一段）和相关 import / state（仅删除按钮 UI 与 mutation 触发逻辑，保留下拉手动选择）。
-- 在 `useEffect`（首次拿到 items 时）判断：若存在 `tariff_rate == null` 的子订单，则自动调用 `classifyItemsTariff({ items: missingOnly, persist: true })` 静默回填；完成后让 list/detail query 失效以刷新。
-- 失败 `toast.error`，不阻塞页面。
+只动前端结构与按需加载，不改业务逻辑。
 
-## 2. 删除"截图批量导入"入口
+### 1. 路由级代码分割（最大收益）
 
-`src/routes/purchase.japan-parcel.index.tsx`：
-- 删除 PageHeader actions 里指向 `/purchase/japan-parcel/import` 的按钮（约 273–276 行）。
-- `description` 文案去掉"截图批量导入"字样，改为"AI 识图 · 手动录入 · 状态人工维护"。
-- 空状态 `EmptyState` 的 description 同步去掉"可以截图批量导入"措辞。
-- 保留路由文件 `purchase.japan-parcel.import.tsx` 不动（避免拖动其他依赖）；只是没有入口而已。
+新增 `src/routes/purchase.japan-parcel.new.lazy.tsx`，把 `NewParcelPage` 主体迁过去，用 TanStack Router 的 lazy 路由：
 
-## 3. 列表表头居中
+```tsx
+// purchase.japan-parcel.new.tsx —— 只留壳
+export const Route = createFileRoute("/purchase/japan-parcel/new")({
+  head: () => ({ meta: [{ title: "新建小包裹 · BOOMER OFF" }] }),
+});
 
-`src/routes/purchase.japan-parcel.index.tsx`：
-- 给 `<TableHead>` 统一加 `className="text-center"`（除"标题"列保持左对齐以方便阅读）。
-- 单元格保持现状（金额仍右对齐 / mono、文本仍左对齐），只动表头。
+// purchase.japan-parcel.new.lazy.tsx
+export const Route = createLazyFileRoute("/purchase/japan-parcel/new")({
+  component: NewParcelPage,
+});
+```
 
-## 验收
-- 新建包裹：粘贴截图 → 识别完成自动出现"关税分类"步骤 → 子订单卡片直接显示类目和税率 → 右侧总计卡的"+ 关税 (CNY)"自动有数值，无需点任何按钮。
-- 详情页右上角不再有 "AI 关税类目" 按钮；老数据进入详情会自动补齐缺失类目。
-- 列表页头部右侧只剩"新建包裹"按钮，表头列名居中显示。
+效果：路由匹配立即出现外壳，主 chunk 异步下载。
+
+### 2. 智能识别面板按需加载
+
+把"智能识别"那块（含 `ScreenshotDropzone` / `RecognizeTimeline` / 所有 5 个识别相关 server function 的 import）抽成 `SmartRecognizePanel.tsx`，在主页面用 `React.lazy` + `Suspense` 包裹，默认折叠未渲染时不下载。
+
+这能让用户上来直接看到"手动新建"表单，识别相关 ~700 行代码 + prompt 文本完全不进入首屏 chunk。
+
+### 3. server function client 桩按需 import
+
+`recognize.functions.ts` 在前端虽然只生成 RPC 桩，但它顶部的 zod schema + 文本 prompt 也会被打包。把这些 import 收进 `SmartRecognizePanel`，主页面不再引用即可一同 tree-shake。
+
+### 4. 触发更早的预下载
+
+`src/routes/purchase.japan-parcel.index.tsx` 的"新建包裹"按钮加上 `onMouseDown` / `onPointerDown` 调 `router.preloadRoute({ to: "/purchase/japan-parcel/new" })`，覆盖"直接 click 不经 hover"的场景，让 mousedown 到 click 这十几毫秒就开始下载。
+
+### 5. 顺手清掉无用 import
+
+新建页 `Tabs/TabsContent/...` 等组件如果只在智能识别区使用，会随 #2 一起移走，主壳不再依赖。
+
+## 文件改动
+
+- 新建 `src/routes/purchase.japan-parcel.new.lazy.tsx`
+- 改写 `src/routes/purchase.japan-parcel.new.tsx`（仅保留 Route 定义 + head）
+- 新建 `src/components/japan-parcel/smart-recognize-panel.tsx`
+- 编辑 `src/routes/purchase.japan-parcel.index.tsx`（按钮加 preloadRoute）
+
+## 不动的部分
+
+- 业务逻辑（识别管线、关税计算、提交逻辑）原样迁移，不改算法
+- server function 实现文件本身不动
+- 列表页其它部分不动
+
+## 预期效果
+
+首次点击时下载的 JS 体积大幅减少（粗估 -60% 以上），路由壳和手动表单几乎瞬开；智能识别面板首次展开时再加载剩余代码，体感等待从"卡很久白屏"变成"几乎即点即开"。

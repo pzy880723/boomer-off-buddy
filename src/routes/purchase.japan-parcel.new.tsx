@@ -1,15 +1,14 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Save, Sparkles, Plus, X, Image as ImageIcon, Type } from "lucide-react";
+import { ArrowLeft, Save, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -18,7 +17,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
-import { ScreenshotDropzone } from "@/components/screenshot-dropzone";
 import {
   PARCEL_STATUS_OPTIONS,
   formatJpy,
@@ -27,21 +25,15 @@ import {
   computeGrandTotal,
 } from "@/lib/japan-parcel.helpers";
 import { createJapanParcel, bulkCreateParcelItems } from "@/lib/japan-parcel.functions";
-import { classifyItemsTariff } from "@/lib/tariff.functions";
-import { TARIFF_CATEGORIES } from "@/lib/tariff";
-import {
-  segmentParcelText,
-  ocrAndSegment,
-  extractParcelInfo,
-  extractIntlFee,
-  extractSubItem,
-} from "@/lib/recognize.functions";
-import { translateTitles } from "@/lib/translate.functions";
-import {
-  RecognizeTimeline,
-  type TimelineStep,
-} from "@/components/japan-parcel/recognize-timeline";
 import { ItemImageUploader } from "@/components/japan-parcel/item-image-uploader";
+import type { RecognizedResult } from "@/components/japan-parcel/smart-recognize-panel";
+
+// Lazy-load the heavy AI recognition panel — keeps initial route chunk small
+const SmartRecognizePanel = lazy(() =>
+  import("@/components/japan-parcel/smart-recognize-panel").then((m) => ({
+    default: m.SmartRecognizePanel,
+  })),
+);
 
 export const Route = createFileRoute("/purchase/japan-parcel/new")({
   head: () => ({ meta: [{ title: "新建小包裹 · BOOMER OFF" }] }),
@@ -156,8 +148,10 @@ const emptyItem = (): SubItem => ({
   tariff_rate: null,
 });
 
-// 关税 = Σ(子订单 item_total_jpy * tariff_rate)，税率由 AI 分类后写入子订单
-
+const mergeNonNull = <T,>(target: T, src: Record<string, unknown>): T => ({
+  ...(target as object),
+  ...Object.fromEntries(Object.entries(src).filter(([, v]) => v != null)),
+}) as T;
 
 // ====== Field component ======
 function F({
@@ -203,269 +197,20 @@ function NewParcelPage() {
   const nav = useNavigate();
   const create = useServerFn(createJapanParcel);
   const bulkItems = useServerFn(bulkCreateParcelItems);
-  const fnSegmentText = useServerFn(segmentParcelText);
-  const fnOcrSegment = useServerFn(ocrAndSegment);
-  const fnExtractParcel = useServerFn(extractParcelInfo);
-  const fnExtractIntl = useServerFn(extractIntlFee);
-  const fnExtractItem = useServerFn(extractSubItem);
-  const fnTranslate = useServerFn(translateTitles);
-  const fnClassify = useServerFn(classifyItemsTariff);
 
   const [parcel, setParcel] = useState<ParcelInfo>(emptyParcel());
   const [intl, setIntl] = useState<IntlFee>(emptyIntl());
   const [items, setItems] = useState<SubItem[]>([emptyItem()]);
-
-  const [smartTab, setSmartTab] = useState<"text" | "image">("text");
-  const [smartText, setSmartText] = useState("");
-  const [smartImage, setSmartImage] = useState<string | null>(null);
   const [usedAi, setUsedAi] = useState(false);
+  const [smartOpen, setSmartOpen] = useState(false);
 
-  // ====== Pipeline timeline ======
-  const [tlSteps, setTlSteps] = useState<TimelineStep[]>([]);
-  const [running, setRunning] = useState(false);
-
-  const upsertStep = (s: TimelineStep) =>
-    setTlSteps((arr) => {
-      const i = arr.findIndex((x) => x.id === s.id);
-      if (i < 0) return [...arr, s];
-      const next = arr.slice();
-      next[i] = { ...next[i], ...s };
-      return next;
-    });
-
-  const mergeNonNull = <T,>(target: T, src: Record<string, unknown>): T => ({
-    ...(target as object),
-    ...Object.fromEntries(Object.entries(src).filter(([, v]) => v != null)),
-  }) as T;
-
-
-  const runPipeline = async () => {
-    setRunning(true);
-    setTlSteps([]);
-    const startedAt = Date.now();
-    try {
-      // ===== Step 1: 预处理 + 分段（或 OCR + 分段） =====
-      let segments: {
-        parcel_block: string | null;
-        intl_fee_block: string | null;
-        item_blocks: string[];
-        hints: {
-          source_order_no: string | null;
-          tracking_no: string | null;
-          status_text: string | null;
-          sub_order_nos: string[];
-        };
-        raw_chars: number;
-        cleaned_chars: number;
-      };
-      if (smartTab === "image" && smartImage) {
-        upsertStep({ id: "ocr", label: "图片 OCR", status: "running", detail: "调用视觉模型读取文字…" });
-        const t0 = Date.now();
-        const r = await fnOcrSegment({ data: { image_base64: smartImage, mime_type: "image/png" } });
-        if (!r.ok) {
-          upsertStep({ id: "ocr", label: "图片 OCR", status: "error", errorMsg: r.reason, durationMs: Date.now() - t0 });
-          throw new Error(r.reason);
-        }
-        segments = r.segments;
-        upsertStep({
-          id: "ocr",
-          label: "图片 OCR",
-          status: "done",
-          detail: `读取 ${r.ocr_text.length} 字符`,
-          durationMs: Date.now() - t0,
-          payload: { ocr_text: r.ocr_text.slice(0, 500) + (r.ocr_text.length > 500 ? "…" : "") },
-        });
-      } else {
-        upsertStep({ id: "seg", label: "预处理 + 分段", status: "running" });
-        const t0 = Date.now();
-        const r = await fnSegmentText({ data: { text: smartText.trim() } });
-        segments = r.segments;
-        upsertStep({
-          id: "seg",
-          label: "预处理 + 分段",
-          status: "done",
-          detail: `去噪 ${segments.raw_chars} → ${segments.cleaned_chars} 字符`,
-          durationMs: Date.now() - t0,
-        });
-      }
-
-      const segSummary = `parcel:${segments.parcel_block ? "✓" : "✗"} · intl:${segments.intl_fee_block ? "✓" : "✗"} · 子订单 ${segments.item_blocks.length}${segments.hints.source_order_no ? " · 订单号已锁定" : ""}`;
-      upsertStep({
-        id: "seg-result",
-        label: "区块识别",
-        status: segments.parcel_block || segments.item_blocks.length ? "done" : "warn",
-        detail: segSummary,
-        payload: {
-          hints: segments.hints,
-          parcel_block: segments.parcel_block?.slice(0, 300),
-          intl_fee_block: segments.intl_fee_block?.slice(0, 300),
-          item_blocks_preview: segments.item_blocks.map((b) => b.slice(0, 120)),
-        },
-      });
-
-      // ===== Step 2: 并发抽 parcel / intl_fee / 每个 item =====
-      const tasks: Promise<unknown>[] = [];
-      let parcelData: Record<string, unknown> | null = null;
-      let intlData: Record<string, unknown> | null = null;
-      const itemsData: Array<Record<string, unknown> | null> = new Array(segments.item_blocks.length).fill(null);
-
-      if (segments.parcel_block) {
-        upsertStep({ id: "ex-parcel", label: "抽取：包裹信息", status: "running" });
-        const t0 = Date.now();
-        tasks.push(
-          fnExtractParcel({ data: { block: segments.parcel_block } }).then((r) => {
-            parcelData = r.data as Record<string, unknown>;
-            const filled = Object.values(r.data).filter((v) => v != null).length;
-            upsertStep({
-              id: "ex-parcel",
-              label: "抽取：包裹信息",
-              status: r.ok ? "done" : "warn",
-              detail: `${filled} 字段 · ${r.model.split("/").pop()}${r.attempts > 1 ? ` · 重试${r.attempts}` : ""}`,
-              durationMs: Date.now() - t0,
-              payload: r.data,
-              errorMsg: r.ok ? undefined : r.reason,
-            });
-          }),
-        );
-      }
-
-      if (segments.intl_fee_block) {
-        upsertStep({ id: "ex-intl", label: "抽取：国际物流费用", status: "running" });
-        const t0 = Date.now();
-        tasks.push(
-          fnExtractIntl({ data: { block: segments.intl_fee_block } }).then((r) => {
-            intlData = r.data as Record<string, unknown>;
-            const filled = Object.values(r.data).filter((v) => v != null).length;
-            upsertStep({
-              id: "ex-intl",
-              label: "抽取：国际物流费用",
-              status: r.ok ? "done" : "warn",
-              detail: `${filled} 字段 · ${r.model.split("/").pop()}${r.attempts > 1 ? ` · 重试${r.attempts}` : ""}`,
-              durationMs: Date.now() - t0,
-              payload: r.data,
-              errorMsg: r.ok ? undefined : r.reason,
-            });
-          }),
-        );
-      }
-
-      segments.item_blocks.forEach((blk, idx) => {
-        const id = `ex-item-${idx}`;
-        upsertStep({ id, label: `抽取：子订单 #${idx + 1}`, status: "running" });
-        const t0 = Date.now();
-        tasks.push(
-          fnExtractItem({ data: { block: blk, index: idx } }).then((r) => {
-            itemsData[idx] = r.data as Record<string, unknown>;
-            const filled = Object.values(r.data).filter((v) => v != null).length;
-            upsertStep({
-              id,
-              label: `抽取：子订单 #${idx + 1}`,
-              status: r.ok ? "done" : "warn",
-              detail: `${filled} 字段 · ${r.model.split("/").pop()}${r.attempts > 1 ? ` · 重试${r.attempts}` : ""}`,
-              durationMs: Date.now() - t0,
-              payload: r.data,
-              errorMsg: r.ok ? undefined : r.reason,
-            });
-          }),
-        );
-      });
-
-      await Promise.all(tasks);
-
-      // ===== Step 3: 写入表单（regex hints 兜底，AI 漏抽时补上） =====
-      const parcelMerged: Record<string, unknown> = { ...(parcelData ?? {}) };
-      if (segments.hints.source_order_no && !parcelMerged.source_order_no)
-        parcelMerged.source_order_no = segments.hints.source_order_no;
-      if (segments.hints.tracking_no && !parcelMerged.tracking_no)
-        parcelMerged.tracking_no = segments.hints.tracking_no;
-      if (segments.hints.status_text && !parcelMerged.status_text)
-        parcelMerged.status_text = segments.hints.status_text;
-      if (Object.keys(parcelMerged).length) setParcel((p) => mergeNonNull(p, parcelMerged));
-      if (intlData) setIntl((i) => mergeNonNull(i, intlData!));
-      const validItems = itemsData.map((it, idx) => {
-        const merged = (it ?? {}) as Record<string, unknown>;
-        const hint = segments.hints.sub_order_nos[idx];
-        if (hint && !merged.sub_order_no) merged.sub_order_no = hint;
-        return Object.keys(merged).length ? merged : null;
-      }).filter(Boolean) as Record<string, unknown>[];
-      if (validItems.length) {
-        setItems(validItems.map((it) => mergeNonNull(emptyItem(), it) as SubItem));
-      }
-      setUsedAi(true);
-
-      // ===== Step 4: 自动翻译子订单日文标题 =====
-      const toTranslate = validItems
-        .map((it, idx) => ({ idx, jp: (it.item_title as string | null) ?? null, cn: (it.item_title_cn as string | null) ?? null }))
-        .filter((x) => x.jp && !x.cn);
-      if (toTranslate.length) {
-        upsertStep({ id: "translate", label: "翻译子订单标题", status: "running", detail: `${toTranslate.length} 条` });
-        const t0 = Date.now();
-        try {
-          const tr = await fnTranslate({ data: { titles: toTranslate.map((x) => x.jp!) } });
-          if (tr.ok) {
-            setItems((arr) => {
-              const next = arr.slice();
-              toTranslate.forEach((x, i) => {
-                const cn = tr.translations[i];
-                if (cn && next[x.idx]) next[x.idx] = { ...next[x.idx], item_title_cn: cn };
-              });
-              return next;
-            });
-          }
-          upsertStep({ id: "translate", label: "翻译子订单标题", status: tr.ok ? "done" : "warn", detail: `${toTranslate.length} 条 · ${((Date.now() - t0) / 1000).toFixed(1)}s`, durationMs: Date.now() - t0 });
-        } catch (e) {
-          upsertStep({ id: "translate", label: "翻译子订单标题", status: "warn", errorMsg: (e as Error).message });
-        }
-      }
-
-      // ===== Step 5: 自动关税分类（不写库，结果回填到本地 items） =====
-      const classifyInput = validItems
-        .map((it, idx) => ({
-          id: `idx-${idx}`,
-          item_title: (it.item_title as string | null) ?? null,
-          item_title_cn: (it.item_title_cn as string | null) ?? null,
-        }))
-        .filter((x) => x.item_title || x.item_title_cn);
-      if (classifyInput.length) {
-        upsertStep({ id: "tariff", label: "关税分类", status: "running", detail: `${classifyInput.length} 条` });
-        const t0 = Date.now();
-        try {
-          const cl = await fnClassify({ data: { items: classifyInput, persist: false } });
-          const map = new Map<string, { category: string; rate: number }>();
-          for (const r of cl.results) {
-            const cat = TARIFF_CATEGORIES.find((c) => c.key === r.category);
-            if (cat) map.set(r.id, { category: cat.key, rate: cat.rate });
-          }
-          setItems((arr) => {
-            const next = arr.slice();
-            classifyInput.forEach((x) => {
-              const idx = Number(x.id.replace("idx-", ""));
-              const m = map.get(x.id);
-              if (m && next[idx]) {
-                next[idx] = { ...next[idx], tariff_category: m.category, tariff_rate: m.rate };
-              }
-            });
-            return next;
-          });
-          upsertStep({ id: "tariff", label: "关税分类", status: "done", detail: `${cl.results.length} 条 · ${((Date.now() - t0) / 1000).toFixed(1)}s`, durationMs: Date.now() - t0 });
-        } catch (e) {
-          upsertStep({ id: "tariff", label: "关税分类", status: "warn", errorMsg: (e as Error).message });
-        }
-      }
-
-      upsertStep({
-        id: "done",
-        label: "完成",
-        status: "done",
-        detail: `共 ${validItems.length} 个子订单 · 总耗时 ${(((Date.now() - startedAt) / 1000)).toFixed(1)}s`,
-      });
-      toast.success(`识别完成，共 ${validItems.length} 个子订单`);
-    } catch (e) {
-      upsertStep({ id: "fail", label: "识别失败", status: "error", errorMsg: (e as Error).message });
-      toast.error((e as Error).message);
-    } finally {
-      setRunning(false);
+  const handleRecognized = (r: RecognizedResult) => {
+    if (Object.keys(r.parcel).length) setParcel((p) => mergeNonNull(p, r.parcel));
+    if (r.intl) setIntl((i) => mergeNonNull(i, r.intl!));
+    if (r.items.length) {
+      setItems(r.items.map((it) => mergeNonNull(emptyItem(), it) as SubItem));
     }
+    setUsedAi(true);
   };
 
   // ====== Totals ======
@@ -557,60 +302,39 @@ function NewParcelPage() {
       <div className="grid gap-5 lg:grid-cols-12">
         {/* === Left main column === */}
         <div className="space-y-5 lg:col-span-8">
-          {/* Smart fill */}
-          <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent shadow-card">
-            <CardHeader className="py-3">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                <Sparkles className="h-4 w-4 text-primary" />
-                智能填写（粘贴页面文字 或 截图，一键识别）
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs value={smartTab} onValueChange={(v) => setSmartTab(v as "text" | "image")}>
-                <TabsList>
-                  <TabsTrigger value="text">
-                    <Type className="mr-1.5 h-3.5 w-3.5" /> 粘贴文字
-                  </TabsTrigger>
-                  <TabsTrigger value="image">
-                    <ImageIcon className="mr-1.5 h-3.5 w-3.5" /> 粘贴截图
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="text" className="mt-3">
-                  <Textarea
-                    rows={6}
-                    placeholder="将网页上的订单/物流费用/商品信息整段复制粘贴到这里…"
-                    value={smartText}
-                    onChange={(e) => setSmartText(e.target.value)}
-                  />
-                </TabsContent>
-                <TabsContent value="image" className="mt-3">
-                  <ScreenshotDropzone
-                    preview={smartImage}
-                    onImage={(dataUrl) => setSmartImage(dataUrl)}
-                  />
-                </TabsContent>
-              </Tabs>
-              <div className="mt-3 flex justify-end">
-                <Button
-                  size="sm"
-                  className="bg-gradient-brand hover:opacity-90"
-                  disabled={
-                    running || (smartTab === "text" ? !smartText.trim() : !smartImage)
-                  }
-                  onClick={runPipeline}
-                >
-                  <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                  {running ? "识别中…" : "一键识别并填充"}
-                </Button>
-              </div>
-
-              {tlSteps.length > 0 && (
-                <div className="mt-3">
-                  <RecognizeTimeline steps={tlSteps} />
+          {/* Smart fill — lazy loaded on demand */}
+          {smartOpen ? (
+            <Suspense
+              fallback={
+                <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+                  <CardContent className="py-6 text-center text-xs text-muted-foreground">
+                    正在加载智能识别模块…
+                  </CardContent>
+                </Card>
+              }
+            >
+              <SmartRecognizePanel onApply={handleRecognized} />
+            </Suspense>
+          ) : (
+            <Card
+              className="cursor-pointer border-primary/20 bg-gradient-to-br from-primary/5 to-transparent shadow-card transition hover:border-primary/40"
+              onMouseEnter={() => {
+                // Warm the chunk on hover
+                void import("@/components/japan-parcel/smart-recognize-panel");
+              }}
+              onClick={() => setSmartOpen(true)}
+            >
+              <CardContent className="flex items-center justify-between py-4">
+                <div>
+                  <div className="text-sm font-semibold">✨ 智能识别填充</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    粘贴文字或截图，一键自动填表（点击展开）
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <Button size="sm" variant="outline">展开</Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* 1. 订单信息 */}
           <Card className="border-border/60 shadow-card">
