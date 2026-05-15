@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Save, Plus, X } from "lucide-react";
@@ -283,8 +283,10 @@ function NewParcelPage() {
         description="智能填充 + 三段式表单，一次保存包裹与所有子订单"
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={() => nav({ to: "/purchase/japan-parcel" })}>
-              <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> 返回
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/purchase/japan-parcel" preload="intent">
+                <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> 返回
+              </Link>
             </Button>
             <Button
               size="sm"
