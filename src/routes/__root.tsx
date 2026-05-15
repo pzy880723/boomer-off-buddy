@@ -61,7 +61,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             重试
           </Button>
           <Button variant="outline" asChild>
-            <a href="/">返回首页</a>
+            <Link to="/dashboard" preload="intent">返回首页</Link>
           </Button>
         </div>
       </div>
@@ -124,7 +124,7 @@ function Breadcrumbs() {
   if (segments.length === 0) return <span className="text-sm text-muted-foreground">首页</span>;
   return (
     <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-      <Link to="/dashboard" className="transition-colors hover:text-foreground">
+      <Link to="/dashboard" preload="intent" className="transition-colors hover:text-foreground">
         首页
       </Link>
       {segments.map((seg, i) => (
