@@ -103,7 +103,7 @@ export const listJapanParcels = createServerFn({ method: "GET" })
         `item_title.ilike.${s},source_order_no.ilike.${s},tracking_no.ilike.${s},seller.ilike.${s},receiver_name.ilike.${s}`,
       );
     }
-    const { data: rows, error } = await q.limit(500);
+    const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
     return { rows: rows ?? [] };
   });
