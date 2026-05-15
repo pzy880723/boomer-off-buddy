@@ -415,7 +415,7 @@ function JapanParcelList() {
                     <TableRow
                       key={r.id}
                       data-state={selected.has(r.id) ? "selected" : undefined}
-                      className="cursor-pointer"
+                      className="group cursor-pointer transition-colors hover:bg-muted/40"
                       onClick={() => {
                         setOpenTab("overview");
                         setOpenCardId(r.id);
@@ -451,71 +451,80 @@ function JapanParcelList() {
                       </TableCell>
                       <TableCell className="text-center text-sm">
                         {subCount > 0 ? (
-                          <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium">
+                          <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums">
                             {subCount}
                           </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        {simple === "delivered" ? (
-                          <Badge className="gap-1">
-                            <CheckCircle2 className="h-3 w-3" /> 已签收
-                          </Badge>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            <Badge variant="secondary" className="gap-1">
-                              <Package className="h-3 w-3" /> 已采购
-                            </Badge>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-6 px-2 text-[11px]"
-                              disabled={statusMut.isPending}
-                              onClick={() => statusMut.mutate({ id: r.id, status: "delivered" })}
-                            >
-                              确认签收
-                            </Button>
+                      <TableCell className="text-right">
+                        {totalCny > 0 ? (
+                          <div className="font-mono text-sm font-semibold tabular-nums">
+                            ￥{Math.round(totalCny).toLocaleString()}
                           </div>
+                        ) : totalJpy > 0 ? (
+                          <div className="font-mono text-sm font-semibold tabular-nums">
+                            ¥{totalJpy.toLocaleString()}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
                         )}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {totalCny > 0
-                          ? `￥${Math.round(totalCny).toLocaleString()}`
-                          : totalJpy > 0
-                            ? `¥${totalJpy.toLocaleString()}`
-                            : "—"}
                         {totalCny > 0 && totalJpy > 0 && (
-                          <div className="text-[10px] text-muted-foreground">
+                          <div className="mt-0.5 font-mono text-[10px] text-muted-foreground tabular-nums">
                             日¥{totalJpy.toLocaleString()}
                             {tariffCny > 0
-                              ? ` + 关税￥${Math.round(tariffCny).toLocaleString()}`
+                              ? ` · 税￥${Math.round(tariffCny).toLocaleString()}`
                               : ""}
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell className="text-sm text-muted-foreground tabular-nums">
                         {r.purchased_at ? new Date(r.purchased_at).toLocaleDateString() : "—"}
                       </TableCell>
+                      <TableCell>
+                        {simple === "delivered" ? (
+                          <Badge className="gap-1 bg-success/15 text-success hover:bg-success/20 border-0">
+                            <CheckCircle2 className="h-3 w-3" /> 已签收
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="gap-1">
+                            <Package className="h-3 w-3" /> 已采购
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex justify-end gap-1">
-                          {simple === "delivered" && (
+                        <div className="flex justify-end gap-0.5">
+                          {simple === "delivered" ? (
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 px-2 text-[11px]"
+                              className="h-8 px-2 text-[11px] text-muted-foreground hover:text-foreground"
                               disabled={statusMut.isPending}
                               onClick={() => statusMut.mutate({ id: r.id, status: "purchased" })}
+                              title="撤销签收"
                             >
                               撤销签收
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 px-2 text-[11px] font-medium text-success hover:bg-success/10 hover:text-success"
+                              disabled={statusMut.isPending}
+                              onClick={() => statusMut.mutate({ id: r.id, status: "delivered" })}
+                              title="确认签收"
+                            >
+                              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                              确认签收
                             </Button>
                           )}
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7"
+                            className="h-8 w-8"
                             aria-label="编辑"
+                            title="编辑"
                             onClick={() => {
                               setOpenTab("edit");
                               setOpenCardId(r.id);
@@ -526,12 +535,13 @@ function JapanParcelList() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
                             disabled={delMut.isPending}
                             onClick={() => {
                               if (confirm("确认删除此订单？")) delMut.mutate(r.id);
                             }}
                             aria-label="删除"
+                            title="删除"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
