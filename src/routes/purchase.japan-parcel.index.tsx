@@ -64,15 +64,16 @@ const ParcelCardDialog = lazy(() =>
   })),
 );
 
-const buildListKey = (search: string, sources: string[]) =>
-  ["jp-parcels", { search, sources }] as const;
+type SortField = "intl_pay_at" | "grand_total_cny" | "created_at";
+type SortDir = "asc" | "desc";
+type SortState = { field: SortField; dir: SortDir };
 
-const listOptions = (search: string, sources: string[]) => ({
-  queryKey: buildListKey(search, sources),
-  queryFn: () =>
-    listJapanParcels({
-      data: { search, source: sources.length ? sources : undefined },
-    }),
+const buildListKey = (search: string, sort: SortState) =>
+  ["jp-parcels", { search, sort }] as const;
+
+const listOptions = (search: string, sort: SortState) => ({
+  queryKey: buildListKey(search, sort),
+  queryFn: () => listJapanParcels({ data: { search, sort } }),
   staleTime: 60_000,
   refetchOnWindowFocus: false,
 });
@@ -94,10 +95,13 @@ type ItemRow = {
   item_image_url: string | null;
   item_total_jpy: number | null;
   item_total_cny: number | null;
-  weight_g: number | null;
+  weight_g?: number | null;
   unit_price_jpy?: number | null;
   quantity?: number | null;
   sub_order_no?: string | null;
+  position?: number | null;
+  tariff_category?: string | null;
+  tariff_rate?: number | null;
 };
 
 type ParcelRow = ParcelCardData & {
@@ -107,6 +111,7 @@ type ParcelRow = ParcelCardData & {
   item_image_url: string | null;
   total_jpy: number | null;
   tariff_cny?: number | null;
+  intl_pay_at?: string | null;
   japan_parcel_items?: ItemRow[];
 };
 
@@ -123,14 +128,15 @@ function JapanParcelList() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<SimpleStatus[]>([]);
-  const [sources, setSources] = useState<string[]>([]);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
   const [currency] = useCurrencyDisplay();
+  const [viewMode] = useParcelViewMode();
+  const [sort, setSort] = useState<SortState>({ field: "intl_pay_at", dir: "desc" });
   const debouncedSearch = useDebounced(search, 300);
 
   const list = useQuery({
-    ...listOptions(debouncedSearch, sources),
+    ...listOptions(debouncedSearch, sort),
     placeholderData: (previousData) => previousData,
   });
 
@@ -143,6 +149,11 @@ function JapanParcelList() {
         : allRows,
     [allRows, statusFilter],
   );
+
+  const toggleSort = (field: SortField) =>
+    setSort((s) =>
+      s.field === field ? { field, dir: s.dir === "desc" ? "asc" : "desc" } : { field, dir: "desc" },
+    );
 
   const statusMut = useMutation({
     mutationFn: async (v: { id: string; status: SimpleStatus }) => {
