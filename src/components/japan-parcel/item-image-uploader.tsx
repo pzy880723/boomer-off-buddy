@@ -165,15 +165,5 @@ export function ItemImageUploaderCompact({
   value: string | null;
   onChange: (url: string | null) => void;
 }) {
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <ItemImageUploader value={value} onChange={onChange} className="h-16 w-16" />
-      {!value && (
-        <Button type="button" variant="ghost" size="sm" className="h-5 px-1 text-[10px]">
-          <Upload className="mr-0.5 h-2.5 w-2.5" />
-          上传
-        </Button>
-      )}
-    </div>
-  );
+  return <ItemImageUploader value={value} onChange={onChange} className="h-16 w-16" />;
 }
