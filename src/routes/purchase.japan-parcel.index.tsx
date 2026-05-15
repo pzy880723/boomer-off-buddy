@@ -124,19 +124,7 @@ function JapanParcelList() {
 
   const queryKey = buildListKey(debouncedSearch, sources);
 
-  const list = useQuery({
-    queryKey,
-    queryFn: () =>
-      fetchList({
-        data: {
-          search: debouncedSearch,
-          source: sources.length ? sources : undefined,
-        },
-      }),
-    placeholderData: (prev) => prev,
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
+  const list = useSuspenseQuery(listOptions(debouncedSearch, sources));
 
   type ListData = Awaited<ReturnType<typeof fetchList>>;
 
