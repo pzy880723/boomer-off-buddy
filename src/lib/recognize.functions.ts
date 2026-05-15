@@ -150,6 +150,18 @@ function segment(rawText: string): Segments {
     if (i >= 0) intlStart = i;
   }
 
+  // 单订单兜底：没有 "子订单：" 锚点时，用 "商品清单"/"费用明细" 作为唯一子订单起点
+  let singleItemStart = -1;
+  if (itemStarts.length === 0) {
+    for (let i = 0; i < lines.length; i++) {
+      if (/^(商品清单|费用明细)$/.test(lines[i])) {
+        singleItemStart = i;
+        break;
+      }
+    }
+    if (singleItemStart >= 0) itemStarts.push(singleItemStart);
+  }
+
   const parcelEnd =
     itemStarts.length > 0
       ? itemStarts[0]
@@ -453,6 +465,38 @@ JDirectItems Auction
 
 【示例输出】
 {"sub_order_no":"CYAE5T4WEF6XGCP","merchant_order_no":"MGZ63TCXCXDW7CCARP","pay_method":"支付宝","pay_at":"2024-12-23T21:41:00+09:00","weight_g":7568,"exchange_rate":0.0484,"unit_price_jpy":5800,"service_fee_jpy":200,"domestic_freight_jpy":0,"freight_diff_jpy":1980,"item_total_jpy":6000,"item_total_cny":291,"item_title":"♪・希少モデル ダイアトーン DIATONE　MODEL　MC-150 MODULAR STEREO カセット FMチューナー プレーヤー モジュラーステレオ・♪管1218-50","item_title_cn":null,"quantity":1}
+
+【兜底：单订单包裹（无"子订单："行）】
+此时块以 \`商品清单\` 或 \`费用明细\` 开头，整段就是**唯一**子订单：
+  订单编号 → sub_order_no
+  商户订单号 → merchant_order_no（与 sub_order_no 不同）
+  商品标题在 seller 行（如 "JDirectItems Fleamarket卖家:NEXUS"）之后那行
+  "商品费用 X日元(≈Y人民币)" → item_total_jpy=X, item_total_cny=Y
+  其余字段（重量/结算汇率/商品价格/手续费/日本国内运费/支付方式/支付时间）语义同上
+
+【示例输入】
+商品清单
+JDirectItems Fleamarket卖家:NEXUS
+Technics テクニクス スピーカーシステム SB-5A
+二手 物流保障 没有明显的损伤或污渍 航空禁运
+附加服务
+未选择
+16,800日元
+1
+费用明细
+商品费用 17,100日元(≈830人民币)
+订单编号 GPP8QCBCBP77XYF
+支付方式 微信支付
+支付时间 2025-01-06 02:08
+商户订单号 AW9K3A847TWE
+重量 23800g
+结算汇率 1日元≈0.0485人民币
+商品价格 16,800日元
+手续费 300日元
+日本国内运费 0日元
+
+【示例输出】
+{"sub_order_no":"GPP8QCBCBP77XYF","merchant_order_no":"AW9K3A847TWE","pay_method":"微信支付","pay_at":"2025-01-06T02:08:00+09:00","weight_g":23800,"exchange_rate":0.0485,"unit_price_jpy":16800,"service_fee_jpy":300,"domestic_freight_jpy":0,"freight_diff_jpy":null,"item_total_jpy":17100,"item_total_cny":830,"item_title":"Technics テクニクス スピーカーシステム SB-5A","item_title_cn":null,"quantity":1}
 `.trim();
 
 // ====================================================================
