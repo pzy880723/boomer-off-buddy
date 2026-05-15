@@ -431,12 +431,19 @@ function NewParcelPage() {
   const totals = useMemo(() => {
     const itemsTotalJpy = items.reduce((s, it) => s + (Number(it.item_total_jpy) || 0), 0);
     const intlTotalJpy = Number(intl.intl_total_jpy) || 0;
-    const tariffJpy = Math.round(itemsTotalJpy * TARIFF_RATE);
-    const grandJpy = itemsTotalJpy + intlTotalJpy + tariffJpy;
+    const freightDiffJpy = sumFreightDiffJpy(items);
+    const tariffJpy = sumTariffJpy(items);
     const rate = Number(intl.intl_exchange_rate) || 0;
-    const grandCny = rate ? +(grandJpy * rate).toFixed(2) : 0;
-    const tariffCny = rate ? +(tariffJpy * rate).toFixed(2) : 0;
-    return { itemsTotalJpy, intlTotalJpy, tariffJpy, grandJpy, grandCny, tariffCny };
+    const { jpy: grandJpy, cny } = computeGrandTotal({
+      itemsTotalJpy,
+      intlTotalJpy,
+      freightDiffJpy,
+      tariffJpy,
+      exchangeRate: rate,
+    });
+    const grandCny = cny ?? 0;
+    const tariffCny = rate > 0 ? Math.round((tariffJpy / rate) * 100) / 100 : 0;
+    return { itemsTotalJpy, intlTotalJpy, freightDiffJpy, tariffJpy, grandJpy, grandCny, tariffCny };
   }, [items, intl.intl_total_jpy, intl.intl_exchange_rate]);
 
   // ====== Save ======
