@@ -277,31 +277,15 @@ function JapanParcelList() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                来源 {sources.length ? `(${sources.length})` : ""}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {Object.entries(PARCEL_SOURCE_LABEL).map(([v, label]) => (
-                <DropdownMenuItem
-                  key={v}
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    toggleSource(v);
-                  }}
-                >
-                  <input type="checkbox" readOnly checked={sources.includes(v)} className="mr-2" />
-                  {label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">币种</span>
-            <CurrencyToggle />
+          <div className="ml-auto flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">展示</span>
+              <ViewModeToggle />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">币种</span>
+              <CurrencyToggle />
+            </div>
           </div>
         </CardContent>
       </Card>
