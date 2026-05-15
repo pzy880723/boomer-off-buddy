@@ -280,11 +280,17 @@ export function ParcelOverviewSections({
 }) {
   const intlTotal = num(value.intl_total_jpy);
   const rate = num(value.intl_exchange_rate);
-  const computedJpy = itemsTotalJpy + intlTotal + tariffJpy;
+  // 日本侧 JPY 合计 = 商品 + 国际物流（关税不计入 JPY）
+  const computedJpy = itemsTotalJpy + intlTotal;
   const grandJpy =
     value.grand_total_jpy != null ? num(value.grand_total_jpy) : computedJpy;
-  const grandCny = value.grand_total_cny != null ? num(value.grand_total_cny) : null;
   const tariffCny = rate > 0 ? Math.round((tariffJpy / rate) * 100) / 100 : null;
+  const computedCny =
+    rate > 0
+      ? Math.round((grandJpy / rate + (tariffCny ?? 0)) * 100) / 100
+      : null;
+  const grandCny =
+    value.grand_total_cny != null ? num(value.grand_total_cny) : computedCny;
 
   return (
     <div className="space-y-4">
@@ -314,35 +320,59 @@ export function ParcelOverviewSections({
       </Section>
 
       <Section title="④ 合计费用">
-        <div className="grid grid-cols-1 gap-3 rounded-md bg-muted/30 p-3 text-xs sm:grid-cols-3">
-          <div>
-            <div className="text-muted-foreground">商品总额</div>
-            <div className="mt-0.5 font-mono">¥{itemsTotalJpy.toLocaleString()}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">国际物流</div>
-            <div className="mt-0.5 font-mono">¥{intlTotal.toLocaleString()}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">关税</div>
-            <div className="mt-0.5 font-mono">
-              ¥{tariffJpy.toLocaleString()}
-              {tariffCny != null ? ` ≈ ￥${tariffCny.toLocaleString()}` : ""}
-            </div>
-          </div>
+        <div className="space-y-1.5 rounded-md bg-muted/30 p-3 text-xs">
+          <Line label="商品总额" v={`¥${itemsTotalJpy.toLocaleString()}`} />
+          <Line label="+ 国际物流" v={`¥${intlTotal.toLocaleString()}`} />
+          <Line
+            label="= 日本侧合计 (JPY)"
+            v={`¥${grandJpy.toLocaleString()}`}
+            strong
+          />
+          <Line
+            label="+ 关税（按子订单税率，国内付人民币）"
+            v={
+              tariffCny != null
+                ? `￥${tariffCny.toLocaleString()}`
+                : `¥${tariffJpy.toLocaleString()} (缺汇率)`
+            }
+          />
         </div>
         <div className="mt-3 flex items-baseline justify-end gap-2">
           <span className="text-sm text-muted-foreground">合计</span>
-          <span className="font-mono text-2xl font-semibold">
-            ¥{grandJpy.toLocaleString()}
-          </span>
+          {grandCny != null ? (
+            <span className="font-mono text-2xl font-semibold">
+              ￥{grandCny.toLocaleString()}
+            </span>
+          ) : (
+            <span className="font-mono text-2xl font-semibold">
+              ¥{grandJpy.toLocaleString()}
+            </span>
+          )}
           {grandCny != null && (
-            <span className="font-mono text-sm text-muted-foreground">
-              ≈ ￥{grandCny.toLocaleString()}
+            <span className="font-mono text-xs text-muted-foreground">
+              （日本侧 ¥{grandJpy.toLocaleString()} + 关税{" "}
+              {tariffCny != null ? `￥${tariffCny.toLocaleString()}` : "—"}）
             </span>
           )}
         </div>
       </Section>
+    </div>
+  );
+}
+
+function Line({
+  label,
+  v,
+  strong,
+}: {
+  label: string;
+  v: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={"font-mono " + (strong ? "font-semibold" : "")}>{v}</span>
     </div>
   );
 }
