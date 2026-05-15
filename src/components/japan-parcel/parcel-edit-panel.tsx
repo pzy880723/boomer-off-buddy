@@ -234,15 +234,17 @@ export function ParcelEditPanel({
         <div className="py-4 text-center text-xs text-muted-foreground">此包裹暂无子订单</div>
       )}
       {items.map((it, idx) => (
-        <div key={it.id} className="flex gap-3 rounded-md border p-3">
+        <div key={it.id} className="flex gap-3 rounded-lg border border-border/60 bg-card p-3 shadow-card transition-shadow hover:shadow-card-hover">
           {it.item_image_url ? (
             <img
               src={it.item_image_url}
               alt=""
-              className="h-16 w-16 flex-shrink-0 rounded object-cover"
+              loading="lazy"
+              decoding="async"
+              className="h-[72px] w-[72px] flex-shrink-0 rounded-md object-cover ring-1 ring-border"
             />
           ) : (
-            <div className="h-16 w-16 flex-shrink-0 rounded bg-muted" />
+            <div className="h-[72px] w-[72px] flex-shrink-0 rounded-md bg-muted" />
           )}
           <div className="min-w-0 flex-1 text-xs">
             <div className="flex items-center justify-between gap-2">
