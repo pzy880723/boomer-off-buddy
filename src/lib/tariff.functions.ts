@@ -23,13 +23,14 @@ export const classifyItemsTariff = createServerFn({ method: "POST" })
         items: z
           .array(
             z.object({
-              id: z.string().uuid(),
+              id: z.string(),
               item_title: z.string().nullable().optional(),
               item_title_cn: z.string().nullable().optional(),
             }),
           )
           .min(1)
           .max(50),
+        persist: z.boolean().optional(),
       })
       .parse(input),
   )
@@ -115,15 +116,18 @@ ${dictText}
     }
     if (!parsed) throw new Error(`AI 分类失败: ${(lastErr as Error)?.message ?? "unknown"}`);
 
+    const persist = data.persist !== false;
     let updated = 0;
-    for (const r of parsed.results) {
-      const cat = TARIFF_CATEGORIES.find((c) => c.key === r.category);
-      if (!cat) continue;
-      const { error } = await supabaseAdmin
-        .from("japan_parcel_items")
-        .update({ tariff_category: cat.key, tariff_rate: cat.rate })
-        .eq("id", r.id);
-      if (!error) updated++;
+    if (persist) {
+      for (const r of parsed.results) {
+        const cat = TARIFF_CATEGORIES.find((c) => c.key === r.category);
+        if (!cat) continue;
+        const { error } = await supabaseAdmin
+          .from("japan_parcel_items")
+          .update({ tariff_category: cat.key, tariff_rate: cat.rate })
+          .eq("id", r.id);
+        if (!error) updated++;
+      }
     }
 
     return { ok: true, updated, total: data.items.length, results: parsed.results };

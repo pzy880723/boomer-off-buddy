@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Save, Trash2, Sparkles } from "lucide-react";
+import { Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -175,24 +175,31 @@ export function ParcelEditPanel({
       ?.status_timeline ?? [];
 
   const classify = useServerFn(classifyItemsTariff);
-  const classifyMut = useMutation({
-    mutationFn: () =>
-      classify({
-        data: {
-          items: items.map((it) => ({
-            id: it.id,
-            item_title: it.item_title,
-            item_title_cn: it.item_title_cn,
-          })),
-        },
-      }),
-    onSuccess: (r) => {
-      toast.success(`AI 已识别 ${r.updated}/${r.total} 个子订单类目`);
-      qc.invalidateQueries({ queryKey: ["jp-parcel", id] });
-      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
+  const [autoClassified, setAutoClassified] = useState(false);
+  useEffect(() => {
+    if (autoClassified) return;
+    if (!q.data) return;
+    const missing = items.filter(
+      (it) => it.tariff_rate == null && (it.item_title || it.item_title_cn),
+    );
+    if (missing.length === 0) return;
+    setAutoClassified(true);
+    classify({
+      data: {
+        items: missing.map((it) => ({
+          id: it.id,
+          item_title: it.item_title,
+          item_title_cn: it.item_title_cn,
+        })),
+        persist: true,
+      },
+    })
+      .then(() => {
+        qc.invalidateQueries({ queryKey: ["jp-parcel", id] });
+        qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+      })
+      .catch((e) => toast.error(`关税分类失败：${(e as Error).message}`));
+  }, [autoClassified, q.data, items, classify, qc, id]);
 
   const saveMut = useMutation({
     mutationFn: () => update({ data: { id, ...form } as never }),
@@ -351,16 +358,6 @@ export function ParcelEditPanel({
             </Button>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => classifyMut.mutate()}
-              disabled={classifyMut.isPending || items.length === 0}
-              title={items.length === 0 ? "无子订单" : "AI 识别每个子订单的关税类目"}
-            >
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              {classifyMut.isPending ? "识别中…" : "AI 关税类目"}
-            </Button>
             <Button
               variant="outline"
               size="sm"

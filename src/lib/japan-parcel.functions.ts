@@ -77,6 +77,8 @@ const ItemCreateSchema = z.object({
   pay_at: z.string().nullable().optional(),
   merchant_order_no: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  tariff_category: z.string().nullable().optional(),
+  tariff_rate: z.number().nullable().optional(),
 });
 
 export const listJapanParcels = createServerFn({ method: "GET" })
