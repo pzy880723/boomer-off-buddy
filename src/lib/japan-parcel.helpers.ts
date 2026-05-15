@@ -108,14 +108,12 @@ export function sumFreightDiffJpy(items: TariffItemLike[]): number {
 export function computeGrandTotal(opts: {
   itemsTotalJpy: number;
   intlTotalJpy: number;
-  freightDiffJpy: number;
   tariffJpy: number;
   exchangeRate?: number | null;
 }): { jpy: number; cny: number | null } {
   const jpy =
     (opts.itemsTotalJpy || 0) +
     (opts.intlTotalJpy || 0) +
-    (opts.freightDiffJpy || 0) +
     (opts.tariffJpy || 0);
   const r = Number(opts.exchangeRate) || 0;
   const cny = r > 0 ? Math.round((jpy / r) * 100) / 100 : null;

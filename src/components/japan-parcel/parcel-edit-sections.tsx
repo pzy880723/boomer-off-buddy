@@ -178,7 +178,6 @@ export function ParcelEditSections({
   onChange,
   itemsTotalJpy,
   itemsSlot,
-  freightDiffJpy = 0,
   tariffJpy = 0,
 }: {
   value: ParcelFormValue;
@@ -186,8 +185,6 @@ export function ParcelEditSections({
   itemsTotalJpy: number;
   /** 第三段（子订单列表 + 编辑/删除）由 ParcelEditPanel 注入，这里只负责排版 */
   itemsSlot: React.ReactNode;
-  /** Σ 子订单运费补差（JPY） */
-  freightDiffJpy?: number;
   /** Σ 子订单关税（JPY，按 tariff_rate 计算） */
   tariffJpy?: number;
 }) {
@@ -195,7 +192,7 @@ export function ParcelEditSections({
 
   const intlTotal = num(value.intl_total_jpy);
   const rate = num(value.intl_exchange_rate);
-  const suggestedJpy = itemsTotalJpy + intlTotal + freightDiffJpy + tariffJpy;
+  const suggestedJpy = itemsTotalJpy + intlTotal + tariffJpy;
   const suggestedCny = rate > 0 ? Math.round((suggestedJpy / rate) * 100) / 100 : null;
   const tariffCny = rate > 0 ? Math.round((tariffJpy / rate) * 100) / 100 : null;
 
