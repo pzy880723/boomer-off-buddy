@@ -107,6 +107,7 @@ type ParcelRow = ParcelCardData & {
 
 function JapanParcelList() {
   const qc = useQueryClient();
+  const router = useRouter();
   const fetchList = useServerFn(listJapanParcels);
   const updateStatus = useServerFn(updateJapanParcelStatus);
   const updateParcel = useServerFn(updateJapanParcel);
