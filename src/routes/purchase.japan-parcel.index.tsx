@@ -109,13 +109,10 @@ type ListData = { rows: ParcelRow[] };
 function JapanParcelList() {
   const qc = useQueryClient();
   const router = useRouter();
-  const fetchList = useServerFn(listJapanParcels);
   const updateStatus = useServerFn(updateJapanParcelStatus);
   const updateParcel = useServerFn(updateJapanParcel);
   const delOne = useServerFn(deleteJapanParcel);
   const delMany = useServerFn(bulkDeleteJapanParcels);
-  const fnTranslate = useServerFn(translateTitles);
-  const fnSaveTitles = useServerFn(bulkSetItemTitlesCn);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -125,11 +122,10 @@ function JapanParcelList() {
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
   const debouncedSearch = useDebounced(search, 300);
 
-  
-
-  const list = useSuspenseQuery(listOptions(debouncedSearch, sources));
-
-  type ListData = Awaited<ReturnType<typeof fetchList>>;
+  const list = useQuery({
+    ...listOptions(debouncedSearch, sources),
+    placeholderData: (previousData) => previousData,
+  });
 
   const allRows = (list.data?.rows ?? []) as unknown as ParcelRow[];
   // 客户端按简化状态筛选
@@ -140,59 +136,6 @@ function JapanParcelList() {
         : allRows,
     [allRows, statusFilter],
   );
-
-  // ===== 懒翻译：列表加载后，自动给前 20 条「第一个子订单缺中文标题」补翻 =====
-  const translatedOnce = useRef(false);
-  useEffect(() => {
-    if (translatedOnce.current || allRows.length === 0) return;
-    translatedOnce.current = true;
-    const need: { id: string; jp: string }[] = [];
-    for (const r of allRows) {
-      const items = r.japan_parcel_items ?? [];
-      for (const it of items) {
-        if (!it.item_title_cn && it.item_title) {
-          need.push({ id: it.id, jp: it.item_title });
-          if (need.length >= 20) break;
-        }
-      }
-      if (need.length >= 20) break;
-    }
-    if (need.length === 0) return;
-    const run = async () => {
-      try {
-        const r = await fnTranslate({ data: { titles: need.map((n) => n.jp) } });
-        if (!r.ok) return;
-        const updates = need
-          .map((n, i) => ({ id: n.id, item_title_cn: r.translations[i] }))
-          .filter((u): u is { id: string; item_title_cn: string } => !!u.item_title_cn);
-        if (updates.length === 0) return;
-        await fnSaveTitles({ data: { updates } });
-        const map = new Map(updates.map((u) => [u.id, u.item_title_cn]));
-        qc.setQueriesData<ListData>({ queryKey: ["jp-parcels"] }, (data) => {
-          if (!data) return data;
-          return {
-            ...data,
-            rows: data.rows.map((row) => ({
-              ...row,
-              japan_parcel_items: (row.japan_parcel_items ?? []).map((it) =>
-                map.has(it.id) ? { ...it, item_title_cn: map.get(it.id)! } : it,
-              ),
-            })),
-          } as ListData;
-        });
-      } catch {
-        /* silent */
-      }
-    };
-    // 等首屏渲染完再发翻译请求，避免抢占数据加载
-    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-    const cic = (window as unknown as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback;
-    const handle = ric ? ric(() => void run(), { timeout: 2000 }) : window.setTimeout(() => void run(), 800);
-    return () => {
-      if (ric && cic) cic(handle);
-      else window.clearTimeout(handle);
-    };
-  }, [allRows, fnTranslate, fnSaveTitles, qc]);
 
   const statusMut = useMutation({
     mutationFn: async (v: { id: string; status: SimpleStatus }) => {
