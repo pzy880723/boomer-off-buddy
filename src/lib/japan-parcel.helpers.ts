@@ -118,11 +118,12 @@ export function computeGrandTotal(opts: {
 }): { jpy: number; cny: number | null; tariffCny: number | null } {
   const jpy = (opts.itemsTotalJpy || 0) + (opts.intlTotalJpy || 0);
   const r = Number(opts.exchangeRate) || 0;
+  // 约定：intl_exchange_rate = 1 JPY 对应的 CNY，故 CNY = JPY * rate
   const tariffCny =
-    r > 0 ? Math.round(((opts.tariffJpy || 0) / r) * 100) / 100 : null;
+    r > 0 ? Math.round(((opts.tariffJpy || 0) * r) * 100) / 100 : null;
   const cny =
     r > 0
-      ? Math.round((jpy / r + (tariffCny ?? 0)) * 100) / 100
+      ? Math.round((jpy * r + (tariffCny ?? 0)) * 100) / 100
       : null;
   return { jpy, cny, tariffCny };
 }
