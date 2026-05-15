@@ -6,7 +6,7 @@ import {
   Plus,
   Search,
   Filter,
-  Upload,
+  
   Trash2,
   Pencil,
   CheckCircle2,
