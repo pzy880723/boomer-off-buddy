@@ -189,11 +189,10 @@ function JapanParcelList() {
       ? w.requestIdleCallback(() => void run(), { timeout: 2000 })
       : window.setTimeout(() => void run(), 800);
     return () => {
-      if (w.requestIdleCallback && "cancelIdleCallback" in window) {
-        (window as unknown as { cancelIdleCallback: (h: number) => void }).cancelIdleCallback(handle);
-      } else {
-        window.clearTimeout(handle);
-      }
+      const cancel = (window as unknown as { cancelIdleCallback?: (h: number) => void })
+        .cancelIdleCallback;
+      if (w.requestIdleCallback && cancel) cancel(handle);
+      else window.clearTimeout(handle);
     };
   }, [allRows, fnTranslate, fnSaveTitles, qc]);
 
