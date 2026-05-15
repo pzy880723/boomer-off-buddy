@@ -368,9 +368,8 @@ function JapanParcelList() {
 
       <Card>
         <CardContent className="p-0">
-          {list.isLoading ? (
-            <div className="p-10 text-center text-sm text-muted-foreground">加载中…</div>
-          ) : rows.length === 0 ? (
+          {rows.length === 0 ? null : false}
+          {rows.length === 0 ? (
             <EmptyState
               title="暂无小包裹订单"
               description="可以截图批量导入、单条 AI 识图，或手动新建。"
