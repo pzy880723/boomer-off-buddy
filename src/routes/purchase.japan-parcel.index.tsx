@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Plus,
@@ -47,16 +47,16 @@ import {
   updateJapanParcel,
   deleteJapanParcel,
   bulkDeleteJapanParcels,
-  bulkSetItemTitlesCn,
 } from "@/lib/japan-parcel.functions";
-import { translateTitles } from "@/lib/translate.functions";
 import { useDebounced } from "@/hooks/use-debounced";
-import {
-  ParcelCardDialog,
-  type ParcelCardData,
-  type ParcelCardItem,
-} from "@/components/japan-parcel/parcel-card-dialog";
+import type { ParcelCardData, ParcelCardItem } from "@/components/japan-parcel/parcel-card-dialog";
 import { ItemsHoverPreview } from "@/components/japan-parcel/items-hover-preview";
+
+const ParcelCardDialog = lazy(() =>
+  import("@/components/japan-parcel/parcel-card-dialog").then((m) => ({
+    default: m.ParcelCardDialog,
+  })),
+);
 
 const buildListKey = (search: string, sources: string[]) =>
   ["jp-parcels", { search, sources }] as const;
@@ -78,7 +78,6 @@ export const Route = createFileRoute("/purchase/japan-parcel/")({
       { name: "description", content: "Meruki / Yahoo / Mercari 小包裹订单管理" },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(listOptions("", [])),
   component: JapanParcelList,
 });
 
@@ -104,6 +103,8 @@ type ParcelRow = ParcelCardData & {
   tariff_cny?: number | null;
   japan_parcel_items?: ItemRow[];
 };
+
+type ListData = { rows: ParcelRow[] };
 
 function JapanParcelList() {
   const qc = useQueryClient();
