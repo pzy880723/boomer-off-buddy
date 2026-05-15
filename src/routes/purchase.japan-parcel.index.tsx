@@ -189,8 +189,6 @@ function JapanParcelList() {
 
   const toggleStatusFilter = (s: SimpleStatus) =>
     setStatusFilter((arr) => (arr.includes(s) ? arr.filter((x) => x !== s) : [...arr, s]));
-  const toggleSource = (v: string) =>
-    setSources((arr) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]));
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
