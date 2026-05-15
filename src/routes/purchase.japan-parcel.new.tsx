@@ -25,13 +25,18 @@ import {
   computeGrandTotal,
 } from "@/lib/japan-parcel.helpers";
 import { createJapanParcel, bulkCreateParcelItems } from "@/lib/japan-parcel.functions";
-import { ItemImageUploader } from "@/components/japan-parcel/item-image-uploader";
 import type { RecognizedResult } from "@/components/japan-parcel/smart-recognize-panel";
 
 // Lazy-load the heavy AI recognition panel — keeps initial route chunk small
 const SmartRecognizePanel = lazy(() =>
   import("@/components/japan-parcel/smart-recognize-panel").then((m) => ({
     default: m.SmartRecognizePanel,
+  })),
+);
+
+const ItemImageUploader = lazy(() =>
+  import("@/components/japan-parcel/item-image-uploader").then((m) => ({
+    default: m.ItemImageUploader,
   })),
 );
 
@@ -434,10 +439,12 @@ function NewParcelPage() {
                     </Button>
                   </div>
                   <div className="flex gap-3">
-                    <ItemImageUploader
-                      value={it.item_image_url}
-                      onChange={(url) => updateItem(it._key, { item_image_url: url })}
-                    />
+                    <Suspense fallback={<div className="h-28 w-28 flex-shrink-0 rounded-md border border-dashed bg-muted/30" />}>
+                      <ItemImageUploader
+                        value={it.item_image_url}
+                        onChange={(url) => updateItem(it._key, { item_image_url: url })}
+                      />
+                    </Suspense>
                     <div className="grid flex-1 gap-3 md:grid-cols-3">
                       <F label="商品标题（日）" value={it.item_title} onChange={(v) => updateItem(it._key, { item_title: v as Str })} />
                       <F label="商品标题（中）" value={it.item_title_cn} onChange={(v) => updateItem(it._key, { item_title_cn: v as Str })} />
