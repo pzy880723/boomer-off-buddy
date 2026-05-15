@@ -404,24 +404,26 @@ function JapanParcelList() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {totalCny > 0 ? (
-                          <div className="font-mono text-sm font-semibold tabular-nums">
-                            ￥{Math.round(totalCny).toLocaleString()}
-                          </div>
-                        ) : totalJpy > 0 ? (
-                          <div className="font-mono text-sm font-semibold tabular-nums">
-                            ¥{totalJpy.toLocaleString()}
+                        {totalCny > 0 || totalJpy > 0 ? (
+                          <div className="space-y-0.5">
+                            {totalJpy > 0 && (
+                              <div className="font-mono text-sm font-semibold tabular-nums">
+                                ¥{totalJpy.toLocaleString()}
+                              </div>
+                            )}
+                            {totalCny > 0 && (
+                              <div className="font-mono text-sm font-semibold tabular-nums">
+                                ￥{Math.round(totalCny).toLocaleString()}
+                              </div>
+                            )}
+                            {tariffCny > 0 && (
+                              <div className="font-mono text-[10px] text-muted-foreground tabular-nums">
+                                税 ￥{Math.round(tariffCny).toLocaleString()}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>
-                        )}
-                        {totalCny > 0 && totalJpy > 0 && (
-                          <div className="mt-0.5 font-mono text-[10px] text-muted-foreground tabular-nums">
-                            日¥{totalJpy.toLocaleString()}
-                            {tariffCny > 0
-                              ? ` · 税￥${Math.round(tariffCny).toLocaleString()}`
-                              : ""}
-                          </div>
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground tabular-nums">

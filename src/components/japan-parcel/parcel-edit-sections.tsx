@@ -337,24 +337,25 @@ export function ParcelOverviewSections({
             }
           />
         </div>
-        <div className="mt-3 flex items-baseline justify-end gap-2">
+        <div className="mt-3 flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1">
           <span className="text-sm text-muted-foreground">合计</span>
-          {grandCny != null ? (
+          <span className="font-mono text-2xl font-semibold">
+            ¥{grandJpy.toLocaleString()}
+            <span className="ml-1 text-xs text-muted-foreground">JPY</span>
+          </span>
+          {grandCny != null && (
             <span className="font-mono text-2xl font-semibold">
               ￥{grandCny.toLocaleString()}
-            </span>
-          ) : (
-            <span className="font-mono text-2xl font-semibold">
-              ¥{grandJpy.toLocaleString()}
-            </span>
-          )}
-          {grandCny != null && (
-            <span className="font-mono text-xs text-muted-foreground">
-              （日本侧 ¥{grandJpy.toLocaleString()} + 关税{" "}
-              {tariffCny != null ? `￥${tariffCny.toLocaleString()}` : "—"}）
+              <span className="ml-1 text-xs text-muted-foreground">CNY</span>
             </span>
           )}
         </div>
+        {grandCny != null && (
+          <div className="mt-1 text-right font-mono text-[11px] text-muted-foreground">
+            日本侧 ¥{grandJpy.toLocaleString()} + 关税{" "}
+            {tariffCny != null ? `￥${tariffCny.toLocaleString()}` : "—"}
+          </div>
+        )}
       </Section>
     </div>
   );
