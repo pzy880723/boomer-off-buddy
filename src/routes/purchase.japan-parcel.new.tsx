@@ -27,6 +27,8 @@ import {
   computeGrandTotal,
 } from "@/lib/japan-parcel.helpers";
 import { createJapanParcel, bulkCreateParcelItems } from "@/lib/japan-parcel.functions";
+import { classifyItemsTariff } from "@/lib/tariff.functions";
+import { TARIFF_CATEGORIES } from "@/lib/tariff";
 import {
   segmentParcelText,
   ocrAndSegment,
