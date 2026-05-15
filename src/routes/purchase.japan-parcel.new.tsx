@@ -267,9 +267,9 @@ function NewParcelPage() {
       }
       return r.row.id;
     },
-    onSuccess: (id) => {
-      toast.success("已保存");
-      nav({ to: "/purchase/japan-parcel/$id", params: { id } });
+    onSuccess: () => {
+      toast.success("已保存，可在列表中继续编辑");
+      nav({ to: "/purchase/japan-parcel" });
     },
     onError: (e) => toast.error((e as Error).message),
   });
