@@ -28,18 +28,18 @@ export function ItemsHoverPreview({
             e.stopPropagation();
             onClick?.();
           }}
-          className="relative block h-10 w-10 overflow-hidden rounded transition-transform hover:scale-[1.04]"
+          className="relative block h-11 w-11 overflow-hidden rounded-md ring-1 ring-border transition-all hover:scale-[1.05] hover:ring-primary/40"
           aria-label="预览所有商品"
         >
           {cover ? (
-            <img src={cover} alt="" className="h-full w-full object-cover" />
+            <img src={cover} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-muted">
               <ImageIcon className="h-4 w-4 text-muted-foreground" />
             </div>
           )}
           {items.length > 1 && (
-            <span className="absolute bottom-0 right-0 rounded-tl bg-black/70 px-1 text-[9px] leading-tight text-white">
+            <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/75 px-1 text-[9px] font-medium leading-tight text-white">
               +{items.length - 1}
             </span>
           )}
