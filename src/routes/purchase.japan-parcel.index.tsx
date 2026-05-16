@@ -1,11 +1,10 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Plus,
   Search,
-  Filter,
   Trash2,
   Pencil,
   CheckCircle2,
@@ -13,6 +12,9 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  AlertTriangle,
+  RotateCcw,
+  Flag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -26,21 +28,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import {
   simplifyStatus,
-  SIMPLE_STATUS_LABEL,
   getDisplayTitle,
-  type SimpleStatus,
 } from "@/lib/japan-parcel.helpers";
 import {
   listJapanParcels,
@@ -48,6 +41,11 @@ import {
   updateJapanParcel,
   deleteJapanParcel,
   bulkDeleteJapanParcels,
+  getJapanParcelCounts,
+  setJapanParcelProblem,
+  restoreJapanParcels,
+  purgeJapanParcels,
+  type ParcelTab,
 } from "@/lib/japan-parcel.functions";
 import { useDebounced } from "@/hooks/use-debounced";
 import type { ParcelCardData, ParcelCardItem } from "@/components/japan-parcel/parcel-card-dialog";
@@ -68,15 +66,16 @@ type SortField = "intl_pay_at" | "grand_total_cny" | "created_at";
 type SortDir = "asc" | "desc";
 type SortState = { field: SortField; dir: SortDir };
 
-const buildListKey = (search: string, sort: SortState) =>
-  ["jp-parcels", { search, sort }] as const;
+const buildListKey = (tab: ParcelTab, search: string, sort: SortState) =>
+  ["jp-parcels", { tab, search, sort }] as const;
 
-const listOptions = (search: string, sort: SortState) => ({
-  queryKey: buildListKey(search, sort),
-  queryFn: () => listJapanParcels({ data: { search, sort } }),
+const listOptions = (tab: ParcelTab, search: string, sort: SortState) => ({
+  queryKey: buildListKey(tab, search, sort),
+  queryFn: () => listJapanParcels({ data: { tab, search, sort } }),
   staleTime: 60_000,
   refetchOnWindowFocus: false,
 });
+
 
 export const Route = createFileRoute("/purchase/japan-parcel/")({
   head: () => ({
@@ -112,10 +111,12 @@ type ParcelRow = ParcelCardData & {
   total_jpy: number | null;
   tariff_cny?: number | null;
   intl_pay_at?: string | null;
+  is_problem?: boolean | null;
+  deleted_at?: string | null;
   japan_parcel_items?: ItemRow[];
 };
 
-type ListData = { rows: ParcelRow[] };
+
 
 function JapanParcelList() {
   const qc = useQueryClient();
@@ -124,10 +125,13 @@ function JapanParcelList() {
   const updateParcel = useServerFn(updateJapanParcel);
   const delOne = useServerFn(deleteJapanParcel);
   const delMany = useServerFn(bulkDeleteJapanParcels);
+  const setProblemFn = useServerFn(setJapanParcelProblem);
+  const restoreFn = useServerFn(restoreJapanParcels);
+  const purgeFn = useServerFn(purgeJapanParcels);
 
+  const [tab, setTab] = useState<ParcelTab>("purchased");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<SimpleStatus[]>([]);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
   const [currency] = useCurrencyDisplay();
@@ -136,28 +140,38 @@ function JapanParcelList() {
   const debouncedSearch = useDebounced(search, 300);
 
   const list = useQuery({
-    ...listOptions(debouncedSearch, sort),
+    ...listOptions(tab, debouncedSearch, sort),
     placeholderData: (previousData) => previousData,
   });
 
-  const allRows = (list.data?.rows ?? []) as unknown as ParcelRow[];
-  // 客户端按简化状态筛选
-  const rows = useMemo(
-    () =>
-      statusFilter.length
-        ? allRows.filter((r) => statusFilter.includes(simplifyStatus(r.status)))
-        : allRows,
-    [allRows, statusFilter],
-  );
+  const countsQ = useQuery({
+    queryKey: ["jp-parcels-counts"],
+    queryFn: () => getJapanParcelCounts(),
+    staleTime: 30_000,
+  });
+  const counts = countsQ.data ?? { all: 0, purchased: 0, delivered: 0, problem: 0, trash: 0 };
+
+  const rows = (list.data?.rows ?? []) as unknown as ParcelRow[];
+  const isTrash = tab === "trash";
 
   const toggleSort = (field: SortField) =>
     setSort((s) =>
       s.field === field ? { field, dir: s.dir === "desc" ? "asc" : "desc" } : { field, dir: "desc" },
     );
 
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+    qc.invalidateQueries({ queryKey: ["jp-parcels-counts"] });
+  };
+
+  const switchTab = (next: ParcelTab) => {
+    if (next === tab) return;
+    setSelected(new Set());
+    setTab(next);
+  };
+
   const statusMut = useMutation({
-    mutationFn: async (v: { id: string; status: SimpleStatus }) => {
-      // 已签收时附带写入 received_at
+    mutationFn: async (v: { id: string; status: "purchased" | "delivered" }) => {
       if (v.status === "delivered") {
         return updateParcel({
           data: { id: v.id, status: "delivered", received_at: new Date().toISOString() } as never,
@@ -165,30 +179,21 @@ function JapanParcelList() {
       }
       return updateStatus({ data: { id: v.id, status: v.status } });
     },
-    onMutate: async (v) => {
-      await qc.cancelQueries({ queryKey: ["jp-parcels"] });
-      const snapshots = qc.getQueriesData<ListData>({ queryKey: ["jp-parcels"] });
-      snapshots.forEach(([key, data]) => {
-        if (!data) return;
-        qc.setQueryData<ListData>(key, {
-          ...data,
-          rows: data.rows.map((r) => (r.id === v.id ? { ...r, status: v.status } : r)),
-        });
-      });
-      return { snapshots };
-    },
-    onError: (e, _v, ctx) => {
-      ctx?.snapshots.forEach(([key, data]) => qc.setQueryData(key, data));
-      toast.error((e as Error).message);
-    },
     onSuccess: (_d, v) => {
       toast.success(v.status === "delivered" ? "已标记为已签收" : "已恢复为已采购");
+      invalidateAll();
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["jp-parcels"] }),
+    onError: (e) => toast.error((e as Error).message),
   });
 
-  const toggleStatusFilter = (s: SimpleStatus) =>
-    setStatusFilter((arr) => (arr.includes(s) ? arr.filter((x) => x !== s) : [...arr, s]));
+  const problemMut = useMutation({
+    mutationFn: (v: { id: string; is_problem: boolean }) => setProblemFn({ data: v }),
+    onSuccess: (_d, v) => {
+      toast.success(v.is_problem ? "已标记为问题包裹" : "已取消问题标记");
+      invalidateAll();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -204,9 +209,9 @@ function JapanParcelList() {
   const delMut = useMutation({
     mutationFn: (id: string) => delOne({ data: { id } }),
     onSuccess: () => {
-      toast.success("已删除");
+      toast.success("已移入回收站");
       setSelected(new Set());
-      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+      invalidateAll();
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -214,35 +219,46 @@ function JapanParcelList() {
   const bulkMut = useMutation({
     mutationFn: (ids: string[]) => delMany({ data: { ids } }),
     onSuccess: (r) => {
-      toast.success(`已删除 ${r.count} 条`);
+      toast.success(`已将 ${r.count} 条移入回收站`);
       setSelected(new Set());
-      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+      invalidateAll();
     },
     onError: (e) => toast.error((e as Error).message),
   });
 
-  const openParcel = allRows.find((r) => r.id === openCardId) ?? null;
+  const restoreMut = useMutation({
+    mutationFn: (ids: string[]) => restoreFn({ data: { ids } }),
+    onSuccess: (r) => {
+      toast.success(`已还原 ${r.count} 条`);
+      setSelected(new Set());
+      invalidateAll();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const purgeMut = useMutation({
+    mutationFn: (ids: string[]) => purgeFn({ data: { ids } }),
+    onSuccess: (r) => {
+      toast.success(`已彻底删除 ${r.count} 条`);
+      setSelected(new Set());
+      invalidateAll();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const openParcel = rows.find((r) => r.id === openCardId) ?? null;
+
+  const TABS: { value: ParcelTab; label: string; count?: number; showBadge?: boolean }[] = [
+    { value: "all", label: "全部", count: counts.all },
+    { value: "purchased", label: "已采购", count: counts.purchased, showBadge: true },
+    { value: "delivered", label: "已签收", count: counts.delivered },
+    { value: "problem", label: "问题包裹", count: counts.problem, showBadge: true },
+    { value: "trash", label: "回收站", count: counts.trash },
+  ];
 
   return (
     <div>
-      <PageHeader
-        title="日本小包裹"
-        description="AI 识图 · 手动录入 · 状态人工维护"
-        actions={
-          <Button asChild size="sm" className="bg-gradient-brand hover:opacity-90">
-            <Link
-              to="/purchase/japan-parcel/new"
-              onMouseEnter={() => router.preloadRoute({ to: "/purchase/japan-parcel/new" })}
-              onPointerDown={() => router.preloadRoute({ to: "/purchase/japan-parcel/new" })}
-            >
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              新建包裹
-            </Link>
-          </Button>
-        }
-      />
-
-      <Card className="mb-4">
+      <Card className="mb-3">
         <CardContent className="flex flex-wrap items-center gap-3 py-3">
           <div className="relative max-w-sm flex-1 min-w-[220px]">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -254,29 +270,6 @@ function JapanParcelList() {
             />
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Filter className="mr-1.5 h-3.5 w-3.5" />
-                状态 {statusFilter.length ? `(${statusFilter.length})` : ""}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {(["purchased", "delivered"] as SimpleStatus[]).map((s) => (
-                <DropdownMenuItem
-                  key={s}
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    toggleStatusFilter(s);
-                  }}
-                >
-                  <input type="checkbox" readOnly checked={statusFilter.includes(s)} className="mr-2" />
-                  {SIMPLE_STATUS_LABEL[s]}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           <div className="ml-auto flex items-center gap-3">
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">展示</span>
@@ -286,9 +279,58 @@ function JapanParcelList() {
               <span className="text-xs text-muted-foreground">币种</span>
               <CurrencyToggle />
             </div>
+            <Button asChild size="sm" className="bg-gradient-brand hover:opacity-90">
+              <Link
+                to="/purchase/japan-parcel/new"
+                onMouseEnter={() => router.preloadRoute({ to: "/purchase/japan-parcel/new" })}
+                onPointerDown={() => router.preloadRoute({ to: "/purchase/japan-parcel/new" })}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                新建包裹
+              </Link>
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      <div className="mb-3 flex items-center gap-1 border-b">
+        {TABS.map((t) => {
+          const active = tab === t.value;
+          const showBadge = t.showBadge && (t.count ?? 0) > 0;
+          return (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => switchTab(t.value)}
+              className={cn(
+                "relative inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2",
+                active
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <span>{t.label}</span>
+              {!showBadge && t.count != null && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {t.count}
+                </span>
+              )}
+              {showBadge && (
+                <span
+                  className={cn(
+                    "ml-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums",
+                    t.value === "problem"
+                      ? "bg-destructive text-destructive-foreground"
+                      : "bg-primary text-primary-foreground",
+                  )}
+                >
+                  {t.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
       {selected.size > 0 && (
         <div className="mb-3 flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm">
@@ -297,18 +339,44 @@ function JapanParcelList() {
             <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
               取消
             </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={bulkMut.isPending}
-              onClick={() => {
-                if (confirm(`确认删除选中的 ${selected.size} 条订单？此操作不可恢复。`))
-                  bulkMut.mutate(Array.from(selected));
-              }}
-            >
-              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-              批量删除
-            </Button>
+            {isTrash ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={restoreMut.isPending}
+                  onClick={() => restoreMut.mutate(Array.from(selected))}
+                >
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  批量还原
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={purgeMut.isPending}
+                  onClick={() => {
+                    if (confirm(`确认彻底删除选中的 ${selected.size} 条订单？此操作不可恢复。`))
+                      purgeMut.mutate(Array.from(selected));
+                  }}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  彻底删除
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={bulkMut.isPending}
+                onClick={() => {
+                  if (confirm(`确认删除选中的 ${selected.size} 条订单？将移入回收站。`))
+                    bulkMut.mutate(Array.from(selected));
+                }}
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                批量删除
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -569,53 +637,107 @@ function JapanParcelList() {
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end gap-0.5">
-                          {simple === "delivered" ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                              disabled={statusMut.isPending}
-                              onClick={() => statusMut.mutate({ id: r.id, status: "purchased" })}
-                              title="撤销签收"
-                            >
-                              撤销签收
-                            </Button>
+                          {isTrash ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 px-2 text-[11px]"
+                                disabled={restoreMut.isPending}
+                                onClick={() => restoreMut.mutate([r.id])}
+                                title="还原"
+                              >
+                                <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                                还原
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                disabled={purgeMut.isPending}
+                                onClick={() => {
+                                  if (confirm("确认彻底删除此订单？此操作不可恢复。"))
+                                    purgeMut.mutate([r.id]);
+                                }}
+                                aria-label="彻底删除"
+                                title="彻底删除"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
                           ) : (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 px-2 text-[11px] font-medium text-success hover:bg-success/10 hover:text-success"
-                              disabled={statusMut.isPending}
-                              onClick={() => statusMut.mutate({ id: r.id, status: "delivered" })}
-                              title="确认签收"
-                            >
-                              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                              确认签收
-                            </Button>
+                            <>
+                              {simple === "delivered" ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                                  disabled={statusMut.isPending}
+                                  onClick={() => statusMut.mutate({ id: r.id, status: "purchased" })}
+                                  title="撤销签收"
+                                >
+                                  撤销签收
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 px-2 text-[11px] font-medium text-success hover:bg-success/10 hover:text-success"
+                                  disabled={statusMut.isPending}
+                                  onClick={() => statusMut.mutate({ id: r.id, status: "delivered" })}
+                                  title="确认签收"
+                                >
+                                  <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                                  确认签收
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={cn(
+                                  "h-8 w-8",
+                                  r.is_problem
+                                    ? "text-destructive hover:text-destructive"
+                                    : "text-muted-foreground hover:text-destructive",
+                                )}
+                                disabled={problemMut.isPending}
+                                onClick={() =>
+                                  problemMut.mutate({ id: r.id, is_problem: !r.is_problem })
+                                }
+                                aria-label={r.is_problem ? "取消问题标记" : "标记为问题包裹"}
+                                title={r.is_problem ? "取消问题标记" : "标记为问题包裹"}
+                              >
+                                {r.is_problem ? (
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Flag className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                aria-label="编辑"
+                                title="编辑"
+                                onClick={() => openCard("edit")}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                disabled={delMut.isPending}
+                                onClick={() => {
+                                  if (confirm("确认删除此订单？将移入回收站。")) delMut.mutate(r.id);
+                                }}
+                                aria-label="删除"
+                                title="删除"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            aria-label="编辑"
-                            title="编辑"
-                            onClick={() => openCard("edit")}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            disabled={delMut.isPending}
-                            onClick={() => {
-                              if (confirm("确认删除此订单？")) delMut.mutate(r.id);
-                            }}
-                            aria-label="删除"
-                            title="删除"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>,

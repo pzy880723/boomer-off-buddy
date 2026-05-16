@@ -124,6 +124,7 @@ export type Database = {
           category: string | null
           completeness: number
           created_at: string
+          deleted_at: string | null
           domestic_freight_jpy: number | null
           eta: string | null
           exchange_rate: number | null
@@ -145,6 +146,7 @@ export type Database = {
           intl_ship_method: string | null
           intl_total_cny: number | null
           intl_total_jpy: number | null
+          is_problem: boolean
           item_image_url: string | null
           item_title: string | null
           item_title_cn: string | null
@@ -181,6 +183,7 @@ export type Database = {
           category?: string | null
           completeness?: number
           created_at?: string
+          deleted_at?: string | null
           domestic_freight_jpy?: number | null
           eta?: string | null
           exchange_rate?: number | null
@@ -202,6 +205,7 @@ export type Database = {
           intl_ship_method?: string | null
           intl_total_cny?: number | null
           intl_total_jpy?: number | null
+          is_problem?: boolean
           item_image_url?: string | null
           item_title?: string | null
           item_title_cn?: string | null
@@ -238,6 +242,7 @@ export type Database = {
           category?: string | null
           completeness?: number
           created_at?: string
+          deleted_at?: string | null
           domestic_freight_jpy?: number | null
           eta?: string | null
           exchange_rate?: number | null
@@ -259,6 +264,7 @@ export type Database = {
           intl_ship_method?: string | null
           intl_total_cny?: number | null
           intl_total_jpy?: number | null
+          is_problem?: boolean
           item_image_url?: string | null
           item_title?: string | null
           item_title_cn?: string | null
