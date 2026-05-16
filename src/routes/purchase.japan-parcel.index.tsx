@@ -5,7 +5,6 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Plus,
   Search,
-  Filter,
   Trash2,
   Pencil,
   CheckCircle2,
@@ -13,6 +12,9 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  AlertTriangle,
+  RotateCcw,
+  Flag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -26,21 +28,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import {
   simplifyStatus,
-  SIMPLE_STATUS_LABEL,
   getDisplayTitle,
-  type SimpleStatus,
 } from "@/lib/japan-parcel.helpers";
 import {
   listJapanParcels,
@@ -48,6 +41,11 @@ import {
   updateJapanParcel,
   deleteJapanParcel,
   bulkDeleteJapanParcels,
+  getJapanParcelCounts,
+  setJapanParcelProblem,
+  restoreJapanParcels,
+  purgeJapanParcels,
+  type ParcelTab,
 } from "@/lib/japan-parcel.functions";
 import { useDebounced } from "@/hooks/use-debounced";
 import type { ParcelCardData, ParcelCardItem } from "@/components/japan-parcel/parcel-card-dialog";
@@ -68,15 +66,16 @@ type SortField = "intl_pay_at" | "grand_total_cny" | "created_at";
 type SortDir = "asc" | "desc";
 type SortState = { field: SortField; dir: SortDir };
 
-const buildListKey = (search: string, sort: SortState) =>
-  ["jp-parcels", { search, sort }] as const;
+const buildListKey = (tab: ParcelTab, search: string, sort: SortState) =>
+  ["jp-parcels", { tab, search, sort }] as const;
 
-const listOptions = (search: string, sort: SortState) => ({
-  queryKey: buildListKey(search, sort),
-  queryFn: () => listJapanParcels({ data: { search, sort } }),
+const listOptions = (tab: ParcelTab, search: string, sort: SortState) => ({
+  queryKey: buildListKey(tab, search, sort),
+  queryFn: () => listJapanParcels({ data: { tab, search, sort } }),
   staleTime: 60_000,
   refetchOnWindowFocus: false,
 });
+
 
 export const Route = createFileRoute("/purchase/japan-parcel/")({
   head: () => ({
