@@ -487,11 +487,9 @@ function JapanParcelList() {
                         >
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             {it?.item_image_url ? (
-                              <img
+                              <ClickableThumb
                                 src={it.item_image_url}
-                                alt=""
                                 className="h-12 w-12 rounded object-cover"
-                                loading="lazy"
                               />
                             ) : (
                               <div className="h-12 w-12 rounded bg-muted" />
