@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { PageHeader } from "@/components/page-header";
 import { cn } from "@/lib/utils";
+import { ClickableThumb } from "@/components/japan-parcel/image-lightbox";
 import {
   parseMerukiParcelScreenshots,
   importParsedParcel,
