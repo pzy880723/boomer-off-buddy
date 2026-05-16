@@ -116,7 +116,7 @@ type ParcelRow = ParcelCardData & {
   japan_parcel_items?: ItemRow[];
 };
 
-type ListData = { rows: ParcelRow[] };
+
 
 function JapanParcelList() {
   const qc = useQueryClient();
