@@ -81,10 +81,16 @@ const ItemCreateSchema = z.object({
   tariff_rate: z.number().nullable().optional(),
 });
 
+const DELIVERED_STATUSES = ["delivered", "completed"];
+const PURCHASED_STATUSES = ["purchased", "at_jp_warehouse", "shipping_intl", "paid", "bidding", "warehouse_jp", "customs", "shipping_cn"];
+
+export type ParcelTab = "all" | "purchased" | "delivered" | "problem" | "trash";
+
 export const listJapanParcels = createServerFn({ method: "GET" })
   .inputValidator(
     (input: {
       search?: string;
+      tab?: ParcelTab;
       status?: string[];
       source?: string[];
       onlyIncomplete?: boolean;
@@ -94,14 +100,25 @@ export const listJapanParcels = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const sortField = data.sort?.field ?? "intl_pay_at";
     const sortDir = data.sort?.dir ?? "desc";
+    const tab: ParcelTab = data.tab ?? "purchased";
     let q = supabaseAdmin
       .from("japan_parcels")
       .select(
-        "id,source,source_order_no,tracking_no,status,item_title,item_title_cn,item_image_url,total_jpy,intl_total_jpy,intl_exchange_rate,intl_pay_at,tariff_jpy,tariff_cny,grand_total_jpy,grand_total_cny,purchased_at,created_at, japan_parcel_items(id, item_title, item_title_cn, item_image_url, item_total_jpy, item_total_cny, unit_price_jpy, quantity, sub_order_no, position, tariff_category, tariff_rate, freight_diff_jpy)",
+        "id,source,source_order_no,tracking_no,status,item_title,item_title_cn,item_image_url,total_jpy,intl_total_jpy,intl_exchange_rate,intl_pay_at,tariff_jpy,tariff_cny,grand_total_jpy,grand_total_cny,purchased_at,created_at,is_problem,deleted_at, japan_parcel_items(id, item_title, item_title_cn, item_image_url, item_total_jpy, item_total_cny, unit_price_jpy, quantity, sub_order_no, position, tariff_category, tariff_rate, freight_diff_jpy)",
       )
       .order(sortField, { ascending: sortDir === "asc", nullsFirst: false })
       .order("created_at", { ascending: false })
-      .limit(100);
+      .limit(200);
+
+    if (tab === "trash") {
+      q = q.not("deleted_at", "is", null);
+    } else {
+      q = q.is("deleted_at", null);
+      if (tab === "purchased") q = q.in("status", PURCHASED_STATUSES);
+      else if (tab === "delivered") q = q.in("status", DELIVERED_STATUSES);
+      else if (tab === "problem") q = q.eq("is_problem", true);
+    }
+
     if (data.status?.length) q = q.in("status", data.status);
     if (data.source?.length) q = q.in("source", data.source);
     if (data.onlyIncomplete) q = q.lt("completeness", 80);
@@ -114,6 +131,65 @@ export const listJapanParcels = createServerFn({ method: "GET" })
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
     return { rows: rows ?? [] };
+  });
+
+export const getJapanParcelCounts = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const head = (build: (q: ReturnType<typeof supabaseAdmin.from<"japan_parcels">>) => unknown) => build as unknown;
+    const [allRes, purchasedRes, deliveredRes, problemRes, trashRes] = await Promise.all([
+      supabaseAdmin.from("japan_parcels").select("id", { count: "exact", head: true }).is("deleted_at", null),
+      supabaseAdmin.from("japan_parcels").select("id", { count: "exact", head: true }).is("deleted_at", null).in("status", PURCHASED_STATUSES),
+      supabaseAdmin.from("japan_parcels").select("id", { count: "exact", head: true }).is("deleted_at", null).in("status", DELIVERED_STATUSES),
+      supabaseAdmin.from("japan_parcels").select("id", { count: "exact", head: true }).is("deleted_at", null).eq("is_problem", true),
+      supabaseAdmin.from("japan_parcels").select("id", { count: "exact", head: true }).not("deleted_at", "is", null),
+    ]);
+    void head;
+    return {
+      all: allRes.count ?? 0,
+      purchased: purchasedRes.count ?? 0,
+      delivered: deliveredRes.count ?? 0,
+      problem: problemRes.count ?? 0,
+      trash: trashRes.count ?? 0,
+    };
+  });
+
+export const setJapanParcelProblem = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), is_problem: z.boolean() }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { error } = await supabaseAdmin
+      .from("japan_parcels")
+      .update({ is_problem: data.is_problem })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const restoreJapanParcels = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z.object({ ids: z.array(z.string().uuid()).min(1).max(500) }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { error } = await supabaseAdmin
+      .from("japan_parcels")
+      .update({ deleted_at: null })
+      .in("id", data.ids);
+    if (error) throw new Error(error.message);
+    return { ok: true, count: data.ids.length };
+  });
+
+export const purgeJapanParcels = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z.object({ ids: z.array(z.string().uuid()).min(1).max(500) }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { error } = await supabaseAdmin
+      .from("japan_parcels")
+      .delete()
+      .in("id", data.ids);
+    if (error) throw new Error(error.message);
+    return { ok: true, count: data.ids.length };
   });
 
 export const getJapanParcel = createServerFn({ method: "GET" })
