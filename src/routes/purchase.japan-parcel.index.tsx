@@ -111,6 +111,8 @@ type ParcelRow = ParcelCardData & {
   total_jpy: number | null;
   tariff_cny?: number | null;
   intl_pay_at?: string | null;
+  is_problem?: boolean | null;
+  deleted_at?: string | null;
   japan_parcel_items?: ItemRow[];
 };
 
