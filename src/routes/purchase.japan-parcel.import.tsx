@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { PageHeader } from "@/components/page-header";
 import { cn } from "@/lib/utils";
+import { ClickableThumb } from "@/components/japan-parcel/image-lightbox";
 import {
   parseMerukiParcelScreenshots,
   importParsedParcel,
@@ -456,7 +457,7 @@ function ImportPage() {
                   <div key={idx} className="rounded-md border p-3">
                     <div className="mb-2 flex items-start gap-3">
                       {it.item_image_url ? (
-                        <img src={it.item_image_url} alt="" className="h-16 w-16 flex-shrink-0 rounded object-cover" />
+                        <ClickableThumb src={it.item_image_url} className="h-16 w-16 flex-shrink-0 rounded object-cover" />
                       ) : (
                         <div className="h-16 w-16 flex-shrink-0 rounded bg-muted" />
                       )}

@@ -39,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ParcelFormValue } from "@/components/parcel-form";
 import { ParcelEditSections } from "./parcel-edit-sections";
+import { ClickableThumb } from "./image-lightbox";
 
 type ItemRow = {
   id: string;
@@ -243,11 +244,8 @@ export function ParcelEditPanel({
       {items.map((it, idx) => (
         <div key={it.id} className="flex gap-3 rounded-lg border border-border/60 bg-card p-3 shadow-card transition-shadow hover:shadow-card-hover">
           {it.item_image_url ? (
-            <img
+            <ClickableThumb
               src={it.item_image_url}
-              alt=""
-              loading="lazy"
-              decoding="async"
               className="h-[72px] w-[72px] flex-shrink-0 rounded-md object-cover ring-1 ring-border"
             />
           ) : (

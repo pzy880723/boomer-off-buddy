@@ -62,6 +62,7 @@ import { ViewModeToggle } from "@/components/japan-parcel/view-mode-toggle";
 import { useCurrencyDisplay } from "@/hooks/use-currency-display";
 import { useParcelViewMode } from "@/hooks/use-parcel-view-mode";
 import { cn } from "@/lib/utils";
+import { ClickableThumb } from "@/components/japan-parcel/image-lightbox";
 
 const ParcelCardDialog = lazy(() =>
   import("@/components/japan-parcel/parcel-card-dialog").then((m) => ({
@@ -487,11 +488,9 @@ function JapanParcelList() {
                         >
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             {it?.item_image_url ? (
-                              <img
+                              <ClickableThumb
                                 src={it.item_image_url}
-                                alt=""
                                 className="h-12 w-12 rounded object-cover"
-                                loading="lazy"
                               />
                             ) : (
                               <div className="h-12 w-12 rounded bg-muted" />

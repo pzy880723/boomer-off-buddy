@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { ClickableThumb } from "./image-lightbox";
 import {
   Dialog,
   DialogContent,
@@ -180,11 +181,8 @@ function OverviewItems({ items }: { items: ParcelCardItem[] }) {
       {items.map((it, idx) => (
         <div key={it.id} className="flex gap-3 rounded-md border p-3">
           {it.item_image_url ? (
-            <img
+            <ClickableThumb
               src={it.item_image_url}
-              alt=""
-              loading="lazy"
-              decoding="async"
               className="h-20 w-20 flex-shrink-0 rounded object-cover"
             />
           ) : (

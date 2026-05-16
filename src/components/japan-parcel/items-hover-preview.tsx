@@ -1,5 +1,6 @@
 import { ImageIcon } from "lucide-react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { ClickableThumb } from "./image-lightbox";
 
 export interface PreviewItem {
   id: string;
@@ -51,11 +52,8 @@ export function ItemsHoverPreview({
             {[first, ...extra].filter(Boolean).map((it) => (
               <div key={it!.id} className="space-y-1">
                 {it!.item_image_url ? (
-                  <img
+                  <ClickableThumb
                     src={it!.item_image_url}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
                     className="aspect-square w-full rounded object-cover"
                   />
                 ) : (
