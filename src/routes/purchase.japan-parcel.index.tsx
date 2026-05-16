@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -47,7 +47,7 @@ import {
   purgeJapanParcels,
   type ParcelTab,
 } from "@/lib/japan-parcel.functions";
-import { useDebounced } from "@/hooks/use-debounced";
+
 import type { ParcelCardData, ParcelCardItem } from "@/components/japan-parcel/parcel-card-dialog";
 import { ItemsHoverPreview } from "@/components/japan-parcel/items-hover-preview";
 import { CurrencyToggle } from "@/components/japan-parcel/currency-toggle";
@@ -131,16 +131,14 @@ function JapanParcelList() {
 
   const [tab, setTab] = useState<ParcelTab>("purchased");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [search, setSearch] = useState("");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
   const [currency] = useCurrencyDisplay();
   const [viewMode] = useParcelViewMode();
   const [sort, setSort] = useState<SortState>({ field: "intl_pay_at", dir: "desc" });
-  const debouncedSearch = useDebounced(search, 300);
 
   const list = useQuery({
-    ...listOptions(tab, debouncedSearch, sort),
+    ...listOptions(tab, "", sort),
     placeholderData: (previousData) => previousData,
   });
 
