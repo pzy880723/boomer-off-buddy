@@ -260,16 +260,6 @@ function JapanParcelList() {
     <div>
       <Card className="mb-3">
         <CardContent className="flex flex-wrap items-center gap-3 py-3">
-          <div className="relative max-w-sm flex-1 min-w-[220px]">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索订单号 / 标题 / 物流单号"
-              className="h-9 pl-8"
-            />
-          </div>
-
           <div className="ml-auto flex items-center gap-3">
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">展示</span>
