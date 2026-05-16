@@ -135,7 +135,6 @@ export const listJapanParcels = createServerFn({ method: "GET" })
 
 export const getJapanParcelCounts = createServerFn({ method: "GET" })
   .handler(async () => {
-    const head = (build: (q: ReturnType<typeof supabaseAdmin.from<"japan_parcels">>) => unknown) => build as unknown;
     const [allRes, purchasedRes, deliveredRes, problemRes, trashRes] = await Promise.all([
       supabaseAdmin.from("japan_parcels").select("id", { count: "exact", head: true }).is("deleted_at", null),
       supabaseAdmin.from("japan_parcels").select("id", { count: "exact", head: true }).is("deleted_at", null).in("status", PURCHASED_STATUSES),
@@ -143,7 +142,6 @@ export const getJapanParcelCounts = createServerFn({ method: "GET" })
       supabaseAdmin.from("japan_parcels").select("id", { count: "exact", head: true }).is("deleted_at", null).eq("is_problem", true),
       supabaseAdmin.from("japan_parcels").select("id", { count: "exact", head: true }).not("deleted_at", "is", null),
     ]);
-    void head;
     return {
       all: allRes.count ?? 0,
       purchased: purchasedRes.count ?? 0,
