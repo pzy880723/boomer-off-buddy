@@ -565,6 +565,9 @@ function JapanParcelList() {
                               <span className="text-muted-foreground">—</span>
                             )}
                           </TableCell>
+                          <TableCell className="text-center text-xs text-muted-foreground tabular-nums">
+                            {payAtDisplay}
+                          </TableCell>
                           <TableCell className="text-center">
                             {simple === "delivered" ? (
                               <Badge className="gap-1 bg-success/15 text-success hover:bg-success/20 border-0">
