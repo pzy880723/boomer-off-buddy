@@ -637,53 +637,107 @@ function JapanParcelList() {
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end gap-0.5">
-                          {simple === "delivered" ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                              disabled={statusMut.isPending}
-                              onClick={() => statusMut.mutate({ id: r.id, status: "purchased" })}
-                              title="撤销签收"
-                            >
-                              撤销签收
-                            </Button>
+                          {isTrash ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 px-2 text-[11px]"
+                                disabled={restoreMut.isPending}
+                                onClick={() => restoreMut.mutate([r.id])}
+                                title="还原"
+                              >
+                                <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                                还原
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                disabled={purgeMut.isPending}
+                                onClick={() => {
+                                  if (confirm("确认彻底删除此订单？此操作不可恢复。"))
+                                    purgeMut.mutate([r.id]);
+                                }}
+                                aria-label="彻底删除"
+                                title="彻底删除"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
                           ) : (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 px-2 text-[11px] font-medium text-success hover:bg-success/10 hover:text-success"
-                              disabled={statusMut.isPending}
-                              onClick={() => statusMut.mutate({ id: r.id, status: "delivered" })}
-                              title="确认签收"
-                            >
-                              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                              确认签收
-                            </Button>
+                            <>
+                              {simple === "delivered" ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                                  disabled={statusMut.isPending}
+                                  onClick={() => statusMut.mutate({ id: r.id, status: "purchased" })}
+                                  title="撤销签收"
+                                >
+                                  撤销签收
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 px-2 text-[11px] font-medium text-success hover:bg-success/10 hover:text-success"
+                                  disabled={statusMut.isPending}
+                                  onClick={() => statusMut.mutate({ id: r.id, status: "delivered" })}
+                                  title="确认签收"
+                                >
+                                  <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                                  确认签收
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={cn(
+                                  "h-8 w-8",
+                                  r.is_problem
+                                    ? "text-destructive hover:text-destructive"
+                                    : "text-muted-foreground hover:text-destructive",
+                                )}
+                                disabled={problemMut.isPending}
+                                onClick={() =>
+                                  problemMut.mutate({ id: r.id, is_problem: !r.is_problem })
+                                }
+                                aria-label={r.is_problem ? "取消问题标记" : "标记为问题包裹"}
+                                title={r.is_problem ? "取消问题标记" : "标记为问题包裹"}
+                              >
+                                {r.is_problem ? (
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Flag className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                aria-label="编辑"
+                                title="编辑"
+                                onClick={() => openCard("edit")}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                disabled={delMut.isPending}
+                                onClick={() => {
+                                  if (confirm("确认删除此订单？将移入回收站。")) delMut.mutate(r.id);
+                                }}
+                                aria-label="删除"
+                                title="删除"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            aria-label="编辑"
-                            title="编辑"
-                            onClick={() => openCard("edit")}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            disabled={delMut.isPending}
-                            onClick={() => {
-                              if (confirm("确认删除此订单？")) delMut.mutate(r.id);
-                            }}
-                            aria-label="删除"
-                            title="删除"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>,
