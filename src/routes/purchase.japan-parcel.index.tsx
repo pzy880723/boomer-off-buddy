@@ -34,7 +34,13 @@ import { EmptyState } from "@/components/empty-state";
 import {
   simplifyStatus,
   getDisplayTitle,
+  computeParcelItemLanded,
 } from "@/lib/japan-parcel.helpers";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import {
   listJapanParcels,
   updateJapanParcelStatus,
