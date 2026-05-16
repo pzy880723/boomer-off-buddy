@@ -256,24 +256,7 @@ function JapanParcelList() {
 
   return (
     <div>
-      <PageHeader
-        title="日本小包裹"
-        description="AI 识图 · 手动录入 · 状态人工维护"
-        actions={
-          <Button asChild size="sm" className="bg-gradient-brand hover:opacity-90">
-            <Link
-              to="/purchase/japan-parcel/new"
-              onMouseEnter={() => router.preloadRoute({ to: "/purchase/japan-parcel/new" })}
-              onPointerDown={() => router.preloadRoute({ to: "/purchase/japan-parcel/new" })}
-            >
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              新建包裹
-            </Link>
-          </Button>
-        }
-      />
-
-      <Card className="mb-4">
+      <Card className="mb-3">
         <CardContent className="flex flex-wrap items-center gap-3 py-3">
           <div className="relative max-w-sm flex-1 min-w-[220px]">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -285,29 +268,6 @@ function JapanParcelList() {
             />
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Filter className="mr-1.5 h-3.5 w-3.5" />
-                状态 {statusFilter.length ? `(${statusFilter.length})` : ""}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {(["purchased", "delivered"] as SimpleStatus[]).map((s) => (
-                <DropdownMenuItem
-                  key={s}
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    toggleStatusFilter(s);
-                  }}
-                >
-                  <input type="checkbox" readOnly checked={statusFilter.includes(s)} className="mr-2" />
-                  {SIMPLE_STATUS_LABEL[s]}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           <div className="ml-auto flex items-center gap-3">
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">展示</span>
@@ -317,9 +277,58 @@ function JapanParcelList() {
               <span className="text-xs text-muted-foreground">币种</span>
               <CurrencyToggle />
             </div>
+            <Button asChild size="sm" className="bg-gradient-brand hover:opacity-90">
+              <Link
+                to="/purchase/japan-parcel/new"
+                onMouseEnter={() => router.preloadRoute({ to: "/purchase/japan-parcel/new" })}
+                onPointerDown={() => router.preloadRoute({ to: "/purchase/japan-parcel/new" })}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                新建包裹
+              </Link>
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      <div className="mb-3 flex items-center gap-1 border-b">
+        {TABS.map((t) => {
+          const active = tab === t.value;
+          const showBadge = t.showBadge && (t.count ?? 0) > 0;
+          return (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => switchTab(t.value)}
+              className={cn(
+                "relative inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2",
+                active
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <span>{t.label}</span>
+              {!showBadge && t.count != null && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {t.count}
+                </span>
+              )}
+              {showBadge && (
+                <span
+                  className={cn(
+                    "ml-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums",
+                    t.value === "problem"
+                      ? "bg-destructive text-destructive-foreground"
+                      : "bg-primary text-primary-foreground",
+                  )}
+                >
+                  {t.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
       {selected.size > 0 && (
         <div className="mb-3 flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm">
@@ -328,18 +337,44 @@ function JapanParcelList() {
             <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
               取消
             </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={bulkMut.isPending}
-              onClick={() => {
-                if (confirm(`确认删除选中的 ${selected.size} 条订单？此操作不可恢复。`))
-                  bulkMut.mutate(Array.from(selected));
-              }}
-            >
-              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-              批量删除
-            </Button>
+            {isTrash ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={restoreMut.isPending}
+                  onClick={() => restoreMut.mutate(Array.from(selected))}
+                >
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  批量还原
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={purgeMut.isPending}
+                  onClick={() => {
+                    if (confirm(`确认彻底删除选中的 ${selected.size} 条订单？此操作不可恢复。`))
+                      purgeMut.mutate(Array.from(selected));
+                  }}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  彻底删除
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={bulkMut.isPending}
+                onClick={() => {
+                  if (confirm(`确认删除选中的 ${selected.size} 条订单？将移入回收站。`))
+                    bulkMut.mutate(Array.from(selected));
+                }}
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                批量删除
+              </Button>
+            )}
           </div>
         </div>
       )}
