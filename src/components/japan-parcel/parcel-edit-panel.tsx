@@ -39,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ParcelFormValue } from "@/components/parcel-form";
 import { ParcelEditSections } from "./parcel-edit-sections";
+import { ClickableThumb } from "./image-lightbox";
 
 type ItemRow = {
   id: string;
