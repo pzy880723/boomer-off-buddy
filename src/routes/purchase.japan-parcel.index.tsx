@@ -507,7 +507,7 @@ function JapanParcelList() {
                               </div>
                             )}
                             <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <span>包裹 {r.source_order_no || r.id.slice(0, 8)}</span>
+                              <span>包裹 {r.tracking_no || r.source_order_no || r.id.slice(0, 8)}</span>
                               {it?.tariff_category && (
                                 <span className="rounded bg-muted px-1 py-px text-[10px]">
                                   {it.tariff_category}
