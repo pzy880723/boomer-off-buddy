@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   RotateCcw,
   Flag,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -506,7 +507,7 @@ function JapanParcelList() {
                               </div>
                             )}
                             <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <span>包裹 {r.source_order_no || r.id.slice(0, 8)}</span>
+                              <span>包裹 {r.tracking_no || r.source_order_no || r.id.slice(0, 8)}</span>
                               {it?.tariff_category && (
                                 <span className="rounded bg-muted px-1 py-px text-[10px]">
                                   {it.tariff_category}
@@ -621,8 +622,27 @@ function JapanParcelList() {
                       </TableCell>
                       <TableCell>
                         <div className="line-clamp-1 text-sm font-medium">{title}</div>
-                        <div className="mt-0.5 text-xs text-muted-foreground">
-                          {r.source_order_no || "—"}
+                        <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                          {r.tracking_no ? (
+                            <>
+                              <span className="font-mono">{r.tracking_no}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(r.tracking_no!);
+                                  toast.success("已复制物流单号");
+                                }}
+                                className="inline-flex h-4 w-4 items-center justify-center rounded hover:bg-muted"
+                                aria-label="复制物流单号"
+                                title="复制"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </button>
+                            </>
+                          ) : (
+                            <span>—</span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-center text-sm">
@@ -634,25 +654,44 @@ function JapanParcelList() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
-                        {totalCny > 0 || totalJpy > 0 ? (
-                          <div className="space-y-0.5">
-                            {currency !== "cny" && totalJpy > 0 && (
-                              <div className="font-mono text-sm font-semibold tabular-nums">
-                                ¥{totalJpy.toLocaleString()}
-                              </div>
-                            )}
-                            {currency !== "jpy" && totalCny > 0 && (
-                              <div className="font-mono text-sm font-semibold tabular-nums">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        {rate > 0 && totalCny > 0 ? (
+                          <HoverCard openDelay={150} closeDelay={80}>
+                            <HoverCardTrigger asChild>
+                              <button
+                                type="button"
+                                className="font-mono text-sm font-semibold tabular-nums hover:underline decoration-dotted underline-offset-4"
+                              >
                                 ￥{Math.round(totalCny).toLocaleString()}
+                              </button>
+                            </HoverCardTrigger>
+                            <HoverCardContent side="left" align="start" className="w-60 p-3 text-xs">
+                              <div className="space-y-1.5 font-mono tabular-nums">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">商品合计</span>
+                                  <span>￥{Math.round(subSumJpy * rate).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">国际运费</span>
+                                  <span>￥{Math.round((Number(r.intl_total_jpy) || 0) * rate).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">关税</span>
+                                  {tariffCny > 0 ? (
+                                    <span>￥{Math.round(tariffCny).toLocaleString()}</span>
+                                  ) : (
+                                    <span className="text-muted-foreground">未设置</span>
+                                  )}
+                                </div>
+                                <div className="border-t pt-1.5 mt-1.5 flex justify-between font-semibold">
+                                  <span>到手价</span>
+                                  <span>￥{Math.round(totalCny).toLocaleString()}</span>
+                                </div>
                               </div>
-                            )}
-                            {currency !== "jpy" && tariffCny > 0 && (
-                              <div className="font-mono text-[10px] text-muted-foreground tabular-nums">
-                                税 ￥{Math.round(tariffCny).toLocaleString()}
-                              </div>
-                            )}
-                          </div>
+                            </HoverCardContent>
+                          </HoverCard>
+                        ) : totalJpy > 0 ? (
+                          <span className="text-xs text-muted-foreground">缺少汇率</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
