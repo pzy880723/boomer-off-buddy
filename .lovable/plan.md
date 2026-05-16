@@ -1,47 +1,43 @@
 ## 目标
 
-商品维度列表中，每个商品显示**完整到手价（CNY）**，悬停弹出明细。
+把包裹维度（`viewMode === "parcel"`）的金额单元格改成与商品维度一致的体验：只显示一个 CNY 合计，悬停弹出明细；同时把标题下面那行的「源订单号」换成「物流单号」。
 
-## 计算口径（每个子商品）
+## 改动 1：合计列改为 CNY + 悬停明细
 
-- **商品金额 JPY** = `item_total_jpy`（缺失时回退 `unit_price_jpy * quantity`）
-- **均摊国际运费 JPY**：按子商品**重量**占比分摊
-  - 权重 = `weight_g`
-  - 若该子单 `weight_g` 缺失，按"包裹总重 / 子单数 × 子单 quantity"做兜底
-  - 若整包所有子单 `weight_g` 都缺失，则等分（按子单数量）
-  - `share_i = intl_total_jpy × weight_i / Σ weight`
-- **小计 JPY** = 商品金额 + 均摊运费
-- **小计 CNY** = 小计 JPY × `intl_exchange_rate`
-- **关税 CNY** = `item_total_jpy × tariff_rate × intl_exchange_rate`（按商品价格计税，不含运费；无 rate 或汇率时为 0）
-- **到手价 CNY** = 小计 CNY + 关税 CNY
+文件：`src/routes/purchase.japan-parcel.index.tsx`（行 ~561 起的 parcel 分支金额单元格）
 
-实现：在 `src/lib/japan-parcel.helpers.ts` 新加纯函数 `computeItemLandedCny(item, parcel, allItems)`，返回：
+明细口径（基于已有数据）：
+- 商品合计 CNY = Σ item_total_jpy × intl_exchange_rate
+- 国际运费 CNY = intl_total_jpy × intl_exchange_rate
+- 关税 CNY = tariff_cny（或 tariff_jpy × rate 兜底，已有逻辑）
+- 到手价 CNY = 商品 + 运费 + 关税（= 现有 totalCny）
+
+UI：
+- 单元格只展示 `￥{Math.round(totalCny).toLocaleString()}`，去掉双币显示，忽略 currency 偏好
+- 用 `HoverCard`（与商品维度同样的样式）包裹，hover 弹出 4 行明细：商品合计 / 国际运费 / 关税 / 到手价
+- 汇率缺失（rate <= 0）：单元格显示「缺少汇率」灰字，无 hover
+- 包裹合计逻辑复用现有 `totalJpy`/`totalCny`/`tariffCny` 变量，无需再算
+
+## 改动 2：列表用「物流单号」替换「源订单号」
+
+同一文件，parcel 分支标题区（行 ~589）：
 ```
-{ itemJpy, freightShareJpy, itemCny, freightShareCny, tariffCny, landedCny, rate }
+<div className="mt-0.5 text-xs text-muted-foreground">
+  {r.source_order_no || "—"}
+</div>
 ```
-均摊一次性算好整包的权重数组，避免循环里重复求和（在调用处把每个商品的结果缓存到 `Map<itemId, ...>`）。
+→ 改为渲染 `r.tracking_no`，并加复制按钮（点击复制单号、toast 提示），无 tracking_no 时显示 `—`。
 
-## 列表 UI（`src/routes/purchase.japan-parcel.index.tsx`，仅 `viewMode === "item"` 分支）
+`ParcelRow` 类型新增 `tracking_no?: string | null`（数据库已存在该字段，`listJapanParcels` 的 select 是 `*`，应该已经返回；确认后类型加上即可）。
 
-1. 合计单元格只显示一个值：`￥{Math.round(landedCny).toLocaleString()}`，去掉双币显示，忽略 `currency` 偏好。
-2. 用 `HoverCard` 包裹金额（参考 `ItemsHoverPreview`，openDelay≈150），悬停弹出明细：
-   ```
-   商品金额        ￥xxx
-   均摊运费        ￥xxx   （按重量分摊）
-   关税(rate%)     ￥xxx
-   ────────────
-   到手价          ￥xxx
-   ```
-   - 关税行：`tariff_rate` 为空时灰字"未设置"，金额 0
-   - 汇率缺失：hover 卡显示"缺少汇率，无法换算 CNY"，列表单元格显示 `—`
-3. 排序/表头不动。
+商品维度行内"包裹 {source_order_no}"的小标也同步改成 "包裹 {tracking_no || source_order_no || id.slice(0,8)}"，让两个维度一致。
 
 ## 不动的部分
 
-- 包裹维度保持现状
 - 数据库、serverFn、其他页面不动
+- 商品维度的金额单元格已完成，不再改
+- 排序/筛选/搜索逻辑保持现状（搜索仍可命中 source_order_no，因为它在 listJapanParcels 的 ilike 里）
 
 ## 影响范围
 
-- `src/lib/japan-parcel.helpers.ts` 新增 `computeItemLandedCny`
-- `src/routes/purchase.japan-parcel.index.tsx` 改 `viewMode === "item"` 分支金额单元格
+- `src/routes/purchase.japan-parcel.index.tsx` 一个文件
