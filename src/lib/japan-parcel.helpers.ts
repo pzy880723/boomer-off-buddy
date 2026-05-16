@@ -140,6 +140,88 @@ export const SIMPLE_STATUS_LABEL: Record<SimpleStatus, string> = {
   delivered: "已签收",
 };
 
+// ===== 商品维度到手价（CNY）：商品 + 按重量分摊运费 + 关税 =====
+
+export interface ItemLandedInput {
+  id?: string;
+  item_total_jpy?: number | null;
+  unit_price_jpy?: number | null;
+  quantity?: number | null;
+  weight_g?: number | null;
+  tariff_rate?: number | null;
+}
+
+export interface ParcelLandedInput {
+  intl_total_jpy?: number | null;
+  intl_exchange_rate?: number | null;
+}
+
+export interface ItemLanded {
+  itemJpy: number;
+  freightShareJpy: number;
+  itemCny: number | null;
+  freightShareCny: number | null;
+  tariffCny: number | null;
+  landedCny: number | null;
+  rate: number;
+}
+
+function itemAmountJpy(it: ItemLandedInput): number {
+  const total = Number(it.item_total_jpy) || 0;
+  if (total > 0) return total;
+  const u = Number(it.unit_price_jpy) || 0;
+  const q = Number(it.quantity) || 0;
+  return u * q;
+}
+
+function itemWeightWeight(it: ItemLandedInput): number {
+  const w = Number(it.weight_g) || 0;
+  if (w > 0) return w;
+  // 兜底：用 quantity 做权重，保证非零
+  const q = Number(it.quantity) || 1;
+  return q;
+}
+
+/**
+ * 计算整个包裹下每个商品的到手价（CNY）。
+ * 返回 Map<itemId | index, ItemLanded>。
+ */
+export function computeParcelItemLanded(
+  parcel: ParcelLandedInput,
+  items: ItemLandedInput[],
+): Map<string, ItemLanded> {
+  const map = new Map<string, ItemLanded>();
+  const rate = Number(parcel.intl_exchange_rate) || 0;
+  const intl = Number(parcel.intl_total_jpy) || 0;
+
+  // 按重量分摊：若所有 weight_g 都缺失则按 quantity 兜底（已在 itemWeightWeight 里处理）
+  const weights = items.map(itemWeightWeight);
+  const totalWeight = weights.reduce((s, w) => s + w, 0);
+
+  items.forEach((it, idx) => {
+    const itemJpy = itemAmountJpy(it);
+    const freightShareJpy =
+      totalWeight > 0 ? (intl * weights[idx]) / totalWeight : 0;
+    const itemCny = rate > 0 ? itemJpy * rate : null;
+    const freightShareCny = rate > 0 ? freightShareJpy * rate : null;
+    const tariffRate = Number(it.tariff_rate) || 0;
+    const tariffCny = rate > 0 ? itemJpy * tariffRate * rate : null;
+    const landedCny =
+      rate > 0 ? (itemCny || 0) + (freightShareCny || 0) + (tariffCny || 0) : null;
+    map.set(it.id ?? String(idx), {
+      itemJpy,
+      freightShareJpy,
+      itemCny,
+      freightShareCny,
+      tariffCny,
+      landedCny,
+      rate,
+    });
+  });
+
+  return map;
+}
+
 // 包裹列表显示标题：优先取第一个子订单的中文标题
 export function getDisplayTitle(
   parcel: { item_title?: string | null; item_title_cn?: string | null; source_order_no?: string | null },
