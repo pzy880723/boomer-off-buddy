@@ -123,10 +123,13 @@ function JapanParcelList() {
   const updateParcel = useServerFn(updateJapanParcel);
   const delOne = useServerFn(deleteJapanParcel);
   const delMany = useServerFn(bulkDeleteJapanParcels);
+  const setProblemFn = useServerFn(setJapanParcelProblem);
+  const restoreFn = useServerFn(restoreJapanParcels);
+  const purgeFn = useServerFn(purgeJapanParcels);
 
+  const [tab, setTab] = useState<ParcelTab>("purchased");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<SimpleStatus[]>([]);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
   const [currency] = useCurrencyDisplay();
@@ -135,28 +138,38 @@ function JapanParcelList() {
   const debouncedSearch = useDebounced(search, 300);
 
   const list = useQuery({
-    ...listOptions(debouncedSearch, sort),
+    ...listOptions(tab, debouncedSearch, sort),
     placeholderData: (previousData) => previousData,
   });
 
-  const allRows = (list.data?.rows ?? []) as unknown as ParcelRow[];
-  // 客户端按简化状态筛选
-  const rows = useMemo(
-    () =>
-      statusFilter.length
-        ? allRows.filter((r) => statusFilter.includes(simplifyStatus(r.status)))
-        : allRows,
-    [allRows, statusFilter],
-  );
+  const countsQ = useQuery({
+    queryKey: ["jp-parcels-counts"],
+    queryFn: () => getJapanParcelCounts(),
+    staleTime: 30_000,
+  });
+  const counts = countsQ.data ?? { all: 0, purchased: 0, delivered: 0, problem: 0, trash: 0 };
+
+  const rows = (list.data?.rows ?? []) as unknown as ParcelRow[];
+  const isTrash = tab === "trash";
 
   const toggleSort = (field: SortField) =>
     setSort((s) =>
       s.field === field ? { field, dir: s.dir === "desc" ? "asc" : "desc" } : { field, dir: "desc" },
     );
 
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+    qc.invalidateQueries({ queryKey: ["jp-parcels-counts"] });
+  };
+
+  const switchTab = (next: ParcelTab) => {
+    if (next === tab) return;
+    setSelected(new Set());
+    setTab(next);
+  };
+
   const statusMut = useMutation({
-    mutationFn: async (v: { id: string; status: SimpleStatus }) => {
-      // 已签收时附带写入 received_at
+    mutationFn: async (v: { id: string; status: "purchased" | "delivered" }) => {
       if (v.status === "delivered") {
         return updateParcel({
           data: { id: v.id, status: "delivered", received_at: new Date().toISOString() } as never,
@@ -164,30 +177,21 @@ function JapanParcelList() {
       }
       return updateStatus({ data: { id: v.id, status: v.status } });
     },
-    onMutate: async (v) => {
-      await qc.cancelQueries({ queryKey: ["jp-parcels"] });
-      const snapshots = qc.getQueriesData<ListData>({ queryKey: ["jp-parcels"] });
-      snapshots.forEach(([key, data]) => {
-        if (!data) return;
-        qc.setQueryData<ListData>(key, {
-          ...data,
-          rows: data.rows.map((r) => (r.id === v.id ? { ...r, status: v.status } : r)),
-        });
-      });
-      return { snapshots };
-    },
-    onError: (e, _v, ctx) => {
-      ctx?.snapshots.forEach(([key, data]) => qc.setQueryData(key, data));
-      toast.error((e as Error).message);
-    },
     onSuccess: (_d, v) => {
       toast.success(v.status === "delivered" ? "已标记为已签收" : "已恢复为已采购");
+      invalidateAll();
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["jp-parcels"] }),
+    onError: (e) => toast.error((e as Error).message),
   });
 
-  const toggleStatusFilter = (s: SimpleStatus) =>
-    setStatusFilter((arr) => (arr.includes(s) ? arr.filter((x) => x !== s) : [...arr, s]));
+  const problemMut = useMutation({
+    mutationFn: (v: { id: string; is_problem: boolean }) => setProblemFn({ data: v }),
+    onSuccess: (_d, v) => {
+      toast.success(v.is_problem ? "已标记为问题包裹" : "已取消问题标记");
+      invalidateAll();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -203,9 +207,9 @@ function JapanParcelList() {
   const delMut = useMutation({
     mutationFn: (id: string) => delOne({ data: { id } }),
     onSuccess: () => {
-      toast.success("已删除");
+      toast.success("已移入回收站");
       setSelected(new Set());
-      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+      invalidateAll();
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -213,14 +217,42 @@ function JapanParcelList() {
   const bulkMut = useMutation({
     mutationFn: (ids: string[]) => delMany({ data: { ids } }),
     onSuccess: (r) => {
-      toast.success(`已删除 ${r.count} 条`);
+      toast.success(`已将 ${r.count} 条移入回收站`);
       setSelected(new Set());
-      qc.invalidateQueries({ queryKey: ["jp-parcels"] });
+      invalidateAll();
     },
     onError: (e) => toast.error((e as Error).message),
   });
 
-  const openParcel = allRows.find((r) => r.id === openCardId) ?? null;
+  const restoreMut = useMutation({
+    mutationFn: (ids: string[]) => restoreFn({ data: { ids } }),
+    onSuccess: (r) => {
+      toast.success(`已还原 ${r.count} 条`);
+      setSelected(new Set());
+      invalidateAll();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const purgeMut = useMutation({
+    mutationFn: (ids: string[]) => purgeFn({ data: { ids } }),
+    onSuccess: (r) => {
+      toast.success(`已彻底删除 ${r.count} 条`);
+      setSelected(new Set());
+      invalidateAll();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const openParcel = rows.find((r) => r.id === openCardId) ?? null;
+
+  const TABS: { value: ParcelTab; label: string; count?: number; showBadge?: boolean }[] = [
+    { value: "all", label: "全部", count: counts.all },
+    { value: "purchased", label: "已采购", count: counts.purchased, showBadge: true },
+    { value: "delivered", label: "已签收", count: counts.delivered },
+    { value: "problem", label: "问题包裹", count: counts.problem, showBadge: true },
+    { value: "trash", label: "回收站", count: counts.trash },
+  ];
 
   return (
     <div>
