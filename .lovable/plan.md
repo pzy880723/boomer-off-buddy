@@ -1,55 +1,47 @@
 ## 目标
 
-在小包裹列表顶部增加 5 档状态 Tab 切换栏（全部 / 已采购 / 已签收 / 问题包裹 / 回收站），同时去掉当前的 PageHeader 标题区，直接呈现「搜索栏 + 新建按钮」+「状态 Tab」。
+商品维度列表中，每个商品显示**完整到手价（CNY）**，悬停弹出明细。
 
-## UX
+## 计算口径（每个子商品）
 
-```text
-┌─────────────────────────────────────────────────┐
-│ [🔍 搜索订单号/标题/物流单号]   [展示][币种][+新建] │
-├─────────────────────────────────────────────────┤
-│ 全部  已采购③  已签收  问题包裹①  回收站         │
-└─────────────────────────────────────────────────┘
+- **商品金额 JPY** = `item_total_jpy`（缺失时回退 `unit_price_jpy * quantity`）
+- **均摊国际运费 JPY**：按子商品**重量**占比分摊
+  - 权重 = `weight_g`
+  - 若该子单 `weight_g` 缺失，按"包裹总重 / 子单数 × 子单 quantity"做兜底
+  - 若整包所有子单 `weight_g` 都缺失，则等分（按子单数量）
+  - `share_i = intl_total_jpy × weight_i / Σ weight`
+- **小计 JPY** = 商品金额 + 均摊运费
+- **小计 CNY** = 小计 JPY × `intl_exchange_rate`
+- **关税 CNY** = `item_total_jpy × tariff_rate × intl_exchange_rate`（按商品价格计税，不含运费；无 rate 或汇率时为 0）
+- **到手价 CNY** = 小计 CNY + 关税 CNY
+
+实现：在 `src/lib/japan-parcel.helpers.ts` 新加纯函数 `computeItemLandedCny(item, parcel, allItems)`，返回：
 ```
+{ itemJpy, freightShareJpy, itemCny, freightShareCny, tariffCny, landedCny, rate }
+```
+均摊一次性算好整包的权重数组，避免循环里重复求和（在调用处把每个商品的结果缓存到 `Map<itemId, ...>`）。
 
-- 默认停留在「已采购」。
-- 「已采购」「问题包裹」右上角显示数字角标（统计全部数据，不随搜索变化）。
-- Tab 选择不持久化（刷新回到默认「已采购」）。
-- 回收站 Tab 内：列表行的「删除」按钮变为「还原 / 彻底删除」两个操作。
+## 列表 UI（`src/routes/purchase.japan-parcel.index.tsx`，仅 `viewMode === "item"` 分支）
 
-## 数据库变更（migration）
+1. 合计单元格只显示一个值：`￥{Math.round(landedCny).toLocaleString()}`，去掉双币显示，忽略 `currency` 偏好。
+2. 用 `HoverCard` 包裹金额（参考 `ItemsHoverPreview`，openDelay≈150），悬停弹出明细：
+   ```
+   商品金额        ￥xxx
+   均摊运费        ￥xxx   （按重量分摊）
+   关税(rate%)     ￥xxx
+   ────────────
+   到手价          ￥xxx
+   ```
+   - 关税行：`tariff_rate` 为空时灰字"未设置"，金额 0
+   - 汇率缺失：hover 卡显示"缺少汇率，无法换算 CNY"，列表单元格显示 `—`
+3. 排序/表头不动。
 
-为 `japan_parcels` 增加两列：
-- `is_problem boolean NOT NULL DEFAULT false` — 手动标记的问题包裹
-- `deleted_at timestamptz` — 软删除时间，NULL 表示未删除
+## 不动的部分
 
-## 后端（src/lib/japan-parcel.functions.ts）
+- 包裹维度保持现状
+- 数据库、serverFn、其他页面不动
 
-- `listJapanParcels`：
-  - 新增入参 `tab: "all" | "purchased" | "delivered" | "problem" | "trash"`，默认 `purchased`。
-  - 非 `trash` 时强制 `deleted_at is null`；`trash` 时强制 `deleted_at is not null`。
-  - `purchased` / `delivered` 按 `status` 简化映射过滤（沿用 `simplifyStatus` 的反向规则，在 SQL 端用 `in(...)`）。
-  - `problem` 时 `is_problem = true`。
-- 新增 `getJapanParcelCounts` serverFn：一次返回 `{ all, purchased, delivered, problem, trash }`（统计全部数据，忽略搜索/过滤；purchased/delivered/problem 仅计未删除）。
-- 新增 `setJapanParcelProblem({ id, is_problem })` —— 用于在行操作里手动标记/取消问题包裹。
-- 改造删除语义：
-  - `deleteJapanParcel` / `bulkDeleteJapanParcels` 改为软删除（写 `deleted_at = now()`）。
-  - 新增 `restoreJapanParcel(s)` 用于回收站还原。
-  - 新增 `purgeJapanParcel(s)` 用于回收站彻底删除（真正 `DELETE`）。
+## 影响范围
 
-## 前端（src/routes/purchase.japan-parcel.index.tsx）
-
-- 删除 `<PageHeader ... />`，把「新建包裹」按钮移到搜索栏右侧（保留预热逻辑）。
-- 新增 `tab` 本地 state，默认 `"purchased"`；把 `tab` 加入 `listOptions` 的 queryKey，传给 serverFn。
-- 新增独立 `useQuery` 拉取 `getJapanParcelCounts`，用于 Tab 角标。
-- 渲染状态 Tab 栏（shadcn `Tabs` 或自定义按钮组），角标用 `Badge`，仅在 count>0 时显示。
-- 移除现有的「状态」DropdownMenu 过滤器（被 Tab 取代）。
-- 在「回收站」Tab 下：
-  - 行操作隐藏「编辑 / 标记签收」；显示「还原」「彻底删除」。
-  - 隐藏批量删除按钮，改为「批量还原 / 批量彻底删除」。
-- 在非回收站 Tab 下，行操作增加「标记/取消问题包裹」入口（dropdown 或图标按钮）。
-
-## 不改动
-
-- 详情页、新建页、识别管线、视图模式切换、币种切换全部保持不变。
-- 已有 5 档状态字典不变；问题包裹是与 status 正交的独立标记。
+- `src/lib/japan-parcel.helpers.ts` 新增 `computeItemLandedCny`
+- `src/routes/purchase.japan-parcel.index.tsx` 改 `viewMode === "item"` 分支金额单元格
