@@ -255,7 +255,10 @@ export const updateJapanParcelStatus = createServerFn({ method: "POST" })
 export const deleteJapanParcel = createServerFn({ method: "POST" })
   .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
-    const { error } = await supabaseAdmin.from("japan_parcels").delete().eq("id", data.id);
+    const { error } = await supabaseAdmin
+      .from("japan_parcels")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -267,7 +270,7 @@ export const bulkDeleteJapanParcels = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { error } = await supabaseAdmin
       .from("japan_parcels")
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .in("id", data.ids);
     if (error) throw new Error(error.message);
     return { ok: true, count: data.ids.length };
