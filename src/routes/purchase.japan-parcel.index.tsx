@@ -471,12 +471,13 @@ function JapanParcelList() {
                     const sortedItems = [...items].sort(
                       (a, b) => (Number(a.position) || 0) - (Number(b.position) || 0),
                     );
+                    const landedMap = computeParcelItemLanded(
+                      { intl_total_jpy: r.intl_total_jpy, intl_exchange_rate: r.intl_exchange_rate },
+                      sortedItems,
+                    );
                     const displayItems: (ItemRow | null)[] = sortedItems.length ? sortedItems : [null];
                     return displayItems.map((it, idx) => {
-                      const itJpy = it ? Number(it.item_total_jpy) || 0 : 0;
-                      const itCny = it
-                        ? Number(it.item_total_cny) || (rate > 0 ? itJpy * rate : 0)
-                        : 0;
+                      const landed = it ? landedMap.get(it.id) : null;
                       return (
                         <TableRow
                           key={`${r.id}-${it?.id ?? "empty"}-${idx}`}
@@ -517,26 +518,52 @@ function JapanParcelList() {
                           <TableCell className="text-center text-sm tabular-nums">
                             {it?.quantity ?? "—"}
                           </TableCell>
-                          <TableCell className="text-right">
-                            {itJpy > 0 || itCny > 0 ? (
-                              <div className="space-y-0.5">
-                                {currency !== "cny" && itJpy > 0 && (
-                                  <div className="font-mono text-sm font-semibold tabular-nums">
-                                    ¥{itJpy.toLocaleString()}
+                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                            {landed && landed.landedCny != null ? (
+                              <HoverCard openDelay={150} closeDelay={80}>
+                                <HoverCardTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="font-mono text-sm font-semibold tabular-nums hover:underline decoration-dotted underline-offset-4"
+                                  >
+                                    ￥{Math.round(landed.landedCny).toLocaleString()}
+                                  </button>
+                                </HoverCardTrigger>
+                                <HoverCardContent side="left" align="start" className="w-60 p-3 text-xs">
+                                  <div className="space-y-1.5 font-mono tabular-nums">
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">商品金额</span>
+                                      <span>￥{Math.round(landed.itemCny ?? 0).toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">均摊运费（按重量）</span>
+                                      <span>￥{Math.round(landed.freightShareCny ?? 0).toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">
+                                        关税
+                                        {it?.tariff_rate
+                                          ? `(${(Number(it.tariff_rate) * 100).toFixed(0)}%)`
+                                          : ""}
+                                      </span>
+                                      {it?.tariff_rate ? (
+                                        <span>￥{Math.round(landed.tariffCny ?? 0).toLocaleString()}</span>
+                                      ) : (
+                                        <span className="text-muted-foreground">未设置</span>
+                                      )}
+                                    </div>
+                                    <div className="border-t pt-1.5 mt-1.5 flex justify-between font-semibold">
+                                      <span>到手价</span>
+                                      <span>￥{Math.round(landed.landedCny).toLocaleString()}</span>
+                                    </div>
                                   </div>
-                                )}
-                                {currency !== "jpy" && itCny > 0 && (
-                                  <div className="font-mono text-sm font-semibold tabular-nums">
-                                    ￥{Math.round(itCny).toLocaleString()}
-                                  </div>
-                                )}
-                              </div>
+                                </HoverCardContent>
+                              </HoverCard>
+                            ) : landed ? (
+                              <span className="text-xs text-muted-foreground">缺少汇率</span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
-                          </TableCell>
-                          <TableCell className="text-center text-xs text-muted-foreground tabular-nums">
-                            {payAtDisplay}
                           </TableCell>
                           <TableCell className="text-center">
                             {simple === "delivered" ? (
