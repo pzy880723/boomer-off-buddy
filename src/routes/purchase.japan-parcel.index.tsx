@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -47,7 +47,7 @@ import {
   purgeJapanParcels,
   type ParcelTab,
 } from "@/lib/japan-parcel.functions";
-
+import { useDebounced } from "@/hooks/use-debounced";
 import type { ParcelCardData, ParcelCardItem } from "@/components/japan-parcel/parcel-card-dialog";
 import { ItemsHoverPreview } from "@/components/japan-parcel/items-hover-preview";
 import { CurrencyToggle } from "@/components/japan-parcel/currency-toggle";
@@ -131,14 +131,16 @@ function JapanParcelList() {
 
   const [tab, setTab] = useState<ParcelTab>("purchased");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
   const [currency] = useCurrencyDisplay();
   const [viewMode] = useParcelViewMode();
   const [sort, setSort] = useState<SortState>({ field: "intl_pay_at", dir: "desc" });
+  const debouncedSearch = useDebounced(search, 300);
 
   const list = useQuery({
-    ...listOptions(tab, "", sort),
+    ...listOptions(tab, debouncedSearch, sort),
     placeholderData: (previousData) => previousData,
   });
 
@@ -258,6 +260,16 @@ function JapanParcelList() {
     <div>
       <Card className="mb-3">
         <CardContent className="flex flex-wrap items-center gap-3 py-3">
+          <div className="relative max-w-sm flex-1 min-w-[220px]">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="搜索订单号 / 标题 / 物流单号"
+              className="h-9 pl-8"
+            />
+          </div>
+
           <div className="ml-auto flex items-center gap-3">
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">展示</span>
