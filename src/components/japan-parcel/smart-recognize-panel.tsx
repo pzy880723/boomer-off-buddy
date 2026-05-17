@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { Link } from "@tanstack/react-router";
 import { Sparkles, Image as ImageIcon, Type } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,9 @@ import {
   extractParcelInfo,
   extractIntlFee,
   extractSubItem,
+  peekOrderNo,
 } from "@/lib/recognize.functions";
+import { lookupExistingParcelByOrderNo } from "@/lib/japan-parcel.functions";
 import { translateTitles } from "@/lib/translate.functions";
 import { classifyItemsTariff } from "@/lib/tariff.functions";
 import { TARIFF_CATEGORIES } from "@/lib/tariff";
