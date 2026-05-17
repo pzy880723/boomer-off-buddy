@@ -71,6 +71,11 @@ const ParcelCardDialog = lazy(() =>
     default: m.ParcelCardDialog,
   })),
 );
+const PackPriceCalculatorDialog = lazy(() =>
+  import("@/components/japan-parcel/pack-price-calculator-dialog").then((m) => ({
+    default: m.PackPriceCalculatorDialog,
+  })),
+);
 
 type SortField = "intl_pay_at" | "grand_total_cny" | "created_at";
 type SortDir = "asc" | "desc";
