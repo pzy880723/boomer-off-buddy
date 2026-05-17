@@ -43,12 +43,23 @@ export function SmartRecognizePanel({ onApply }: Props) {
   const fnExtractItem = useServerFn(extractSubItem);
   const fnTranslate = useServerFn(translateTitles);
   const fnClassify = useServerFn(classifyItemsTariff);
+  const fnPeek = useServerFn(peekOrderNo);
+  const fnLookup = useServerFn(lookupExistingParcelByOrderNo);
 
   const [smartTab, setSmartTab] = useState<"text" | "image">("text");
   const [smartText, setSmartText] = useState("");
   const [smartImage, setSmartImage] = useState<string | null>(null);
   const [tlSteps, setTlSteps] = useState<TimelineStep[]>([]);
   const [running, setRunning] = useState(false);
+  const [existing, setExisting] = useState<{
+    id: string;
+    source_order_no: string | null;
+    created_at: string;
+    status: string;
+    status_text: string | null;
+    item_title: string | null;
+    item_title_cn: string | null;
+  } | null>(null);
 
   const upsertStep = (s: TimelineStep) =>
     setTlSteps((arr) => {
@@ -59,11 +70,66 @@ export function SmartRecognizePanel({ onApply }: Props) {
       return next;
     });
 
-  const runPipeline = async () => {
+  const runPipeline = async (opts: { force?: boolean } = {}) => {
     setRunning(true);
     setTlSteps([]);
+    setExisting(null);
     const startedAt = Date.now();
     try {
+      // —— 预扫订单号，命中已存在则拦截 ——
+      if (!opts.force) {
+        upsertStep({ id: "peek", label: "查重", status: "running", detail: "提取订单号…" });
+        const t0 = Date.now();
+        try {
+          const peek = await fnPeek({
+            data:
+              smartTab === "text"
+                ? { text: smartText.trim() }
+                : { image_base64: smartImage!, mime_type: "image/png" },
+          });
+          if (peek.ok && peek.order_no) {
+            const lk = await fnLookup({ data: { order_nos: [peek.order_no] } });
+            if (lk.matches.length > 0) {
+              const m = lk.matches[0];
+              setExisting(m as typeof existing);
+              upsertStep({
+                id: "peek",
+                label: "查重",
+                status: "warn",
+                detail: `已存在订单 ${peek.order_no},未执行识别`,
+                durationMs: Date.now() - t0,
+                payload: m,
+              });
+              setRunning(false);
+              return;
+            }
+            upsertStep({
+              id: "peek",
+              label: "查重",
+              status: "done",
+              detail: `新订单 ${peek.order_no},继续识别`,
+              durationMs: Date.now() - t0,
+            });
+          } else {
+            upsertStep({
+              id: "peek",
+              label: "查重",
+              status: "done",
+              detail: "未提取到订单号,继续识别",
+              durationMs: Date.now() - t0,
+            });
+          }
+        } catch {
+          upsertStep({
+            id: "peek",
+            label: "查重",
+            status: "warn",
+            detail: "预扫失败,继续识别",
+            durationMs: Date.now() - t0,
+          });
+        }
+      }
+
       let segments: {
         parcel_block: string | null;
         intl_fee_block: string | null;
