@@ -398,25 +398,66 @@ function ImportPage() {
                     setImages([]);
                     setResult(null);
                     setParseError(null);
+                    setExisting(null);
                   }}
-                  disabled={parsing}
+                  disabled={parsing || peeking}
                 >
                   清空
                 </Button>
                 <Button
                   size="sm"
                   className="bg-gradient-brand hover:opacity-90"
-                  disabled={parsing || images.length === 0}
+                  disabled={parsing || peeking || images.length === 0}
                   onClick={() => runParse()}
                 >
-                  {parsing ? (
+                  {parsing || peeking ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  {result ? "重新识别" : "开始 AI 识别"}
+                  {peeking ? "查重中…" : result ? "重新识别" : "开始 AI 识别"}
                 </Button>
               </div>
+
+              {existing && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs">
+                  <div className="mb-2 font-medium text-amber-900">
+                    ⚠️ 该订单已存在,无需再次识别
+                  </div>
+                  <div className="space-y-0.5 text-amber-900/80">
+                    <div>订单号:<span className="font-mono">{existing.source_order_no}</span></div>
+                    <div>创建时间:{new Date(existing.created_at).toLocaleString("zh-CN")}</div>
+                    <div>当前状态:{existing.status_text ?? existing.status}</div>
+                    {(existing.item_title_cn ?? existing.item_title) && (
+                      <div className="truncate">标题:{existing.item_title_cn ?? existing.item_title}</div>
+                    )}
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => nav({ to: "/purchase/japan-parcel/$id", params: { id: existing.id } })}
+                    >
+                      打开包裹
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => runParse({ force: true })}
+                      disabled={parsing}
+                    >
+                      仍要重新识别
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setExisting(null)}
+                    >
+                      取消
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {parseError && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
