@@ -17,6 +17,7 @@ import {
   Flag,
   Copy,
   Calculator,
+  PackageCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
