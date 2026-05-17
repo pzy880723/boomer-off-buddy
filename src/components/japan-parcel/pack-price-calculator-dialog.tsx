@@ -256,19 +256,14 @@ export function PackPriceCalculatorDialog({ open, onOpenChange, item, landedCny 
           {/* 结果 */}
           {piecesNum > 0 && (
             <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
-              <div className="text-xs text-muted-foreground">单件成本</div>
-              <div className="mt-1 flex items-baseline gap-3 font-mono tabular-nums">
+              <div className="text-xs text-muted-foreground">单件到手成本</div>
+              <div className="mt-1 flex items-baseline gap-2 font-mono tabular-nums">
                 <span className="text-lg font-semibold">
-                  ¥{pieceJpy != null ? pieceJpy.toFixed(2) : "—"}
+                  {pieceCny != null ? `RMB ${pieceCny.toFixed(2)}` : "—"}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   / {unit || "个"}
                 </span>
-                {pieceCny != null && (
-                  <span className="ml-auto text-sm">
-                    到手 ￥{pieceCny.toFixed(2)} / {unit || "个"}
-                  </span>
-                )}
               </div>
             </div>
           )}
