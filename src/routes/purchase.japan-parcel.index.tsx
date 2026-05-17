@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Flag,
   Copy,
+  Calculator,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ import {
   simplifyStatus,
   getDisplayTitle,
   computeParcelItemLanded,
+  computePiecePrice,
 } from "@/lib/japan-parcel.helpers";
 import {
   HoverCard,
@@ -109,6 +111,9 @@ type ItemRow = {
   position?: number | null;
   tariff_category?: string | null;
   tariff_rate?: number | null;
+  pack_pieces?: number | null;
+  pack_pieces_source?: string | null;
+  pack_unit_note?: string | null;
 };
 
 type ParcelRow = ParcelCardData & {
