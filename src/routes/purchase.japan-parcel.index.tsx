@@ -885,6 +885,17 @@ function JapanParcelList() {
           />
         </Suspense>
       )}
+
+      {packCalc && (
+        <Suspense fallback={null}>
+          <PackPriceCalculatorDialog
+            open={!!packCalc}
+            onOpenChange={(o) => !o && setPackCalc(null)}
+            item={packCalc.item}
+            landedCny={packCalc.landedCny}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
