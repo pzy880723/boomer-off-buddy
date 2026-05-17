@@ -28,6 +28,8 @@ import {
   type ParsedItem,
   type ParsedTimelineEntry,
 } from "@/lib/meruki-parse.functions";
+import { peekOrderNo } from "@/lib/recognize.functions";
+import { lookupExistingParcelByOrderNo } from "@/lib/japan-parcel.functions";
 
 export const Route = createFileRoute("/purchase/japan-parcel/import")({
   head: () => ({ meta: [{ title: "截图批量导入 · BOOMER OFF" }] }),
