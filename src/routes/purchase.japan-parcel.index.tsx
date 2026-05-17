@@ -147,6 +147,7 @@ function JapanParcelList() {
   const [search, setSearch] = useState("");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
+  const [packCalc, setPackCalc] = useState<{ item: ItemRow; landedCny: number | null } | null>(null);
   const [currency] = useCurrencyDisplay();
   const [viewMode] = useParcelViewMode();
   const [sort, setSort] = useState<SortState>({ field: "intl_pay_at", dir: "desc" });
