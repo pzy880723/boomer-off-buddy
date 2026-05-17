@@ -180,9 +180,9 @@ export function PackPriceCalculatorDialog({ open, onOpenChange, item, landedCny 
           {/* 商品概览 */}
           <div className="flex gap-3 rounded-md border p-3">
             {item.item_image_url ? (
-              <img
+              <ClickableThumb
                 src={item.item_image_url}
-                alt=""
+                alt={item.item_title ?? ""}
                 className="h-16 w-16 flex-shrink-0 rounded object-cover"
               />
             ) : (
