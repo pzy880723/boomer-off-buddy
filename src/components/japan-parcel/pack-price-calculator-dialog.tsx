@@ -199,13 +199,13 @@ export function PackPriceCalculatorDialog({ open, onOpenChange, item, landedCny 
                   {item.item_title}
                 </div>
               )}
-              <div className="mt-1 flex gap-3 font-mono tabular-nums">
-                <span>整件 ¥{Number(item.item_total_jpy ?? 0).toLocaleString()}</span>
-                {landedCny != null && (
-                  <span className="text-muted-foreground">
-                    到手 ￥{Math.round(landedCny).toLocaleString()}
-                  </span>
-                )}
+              <div className="mt-1 font-mono tabular-nums">
+                <span>
+                  到手{" "}
+                  {landedCny != null
+                    ? `RMB ${landedCny.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : "—"}
+                </span>
               </div>
             </div>
           </div>
