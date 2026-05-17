@@ -51,6 +51,7 @@ import {
   updateJapanParcel,
   deleteJapanParcel,
   bulkDeleteJapanParcels,
+  bulkUpdateJapanParcelStatus,
   getJapanParcelCounts,
   setJapanParcelProblem,
   restoreJapanParcels,
