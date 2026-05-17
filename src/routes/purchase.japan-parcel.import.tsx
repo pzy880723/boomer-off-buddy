@@ -157,13 +157,39 @@ function ImportPage() {
     setImages((prev) => prev.filter((x) => x.id !== id));
   };
 
-  const runParse = async () => {
+  const runParse = async (opts: { force?: boolean } = {}) => {
     if (images.length === 0) return;
-    setParsing(true);
     setParseError(null);
     setResult(null);
+    setExisting(null);
+
+    // 预扫第一张图，命中已存在则拦截
+    if (!opts.force) {
+      setPeeking(true);
+      try {
+        const peek = await peekFn({
+          data: {
+            image_base64: images[0].dataUrl,
+            mime_type: images[0].mime,
+          },
+        });
+        if (peek.ok && peek.order_no) {
+          const lk = await lookupFn({ data: { order_nos: [peek.order_no] } });
+          if (lk.matches.length > 0) {
+            setExisting(lk.matches[0] as ExistingMatch);
+            setPeeking(false);
+            return;
+          }
+        }
+      } catch {
+        // 预扫失败不阻塞，直接走完整识别
+      } finally {
+        setPeeking(false);
+      }
+    }
+
+    setParsing(true);
     setImages((prev) => prev.map((x) => ({ ...x, state: "uploading" })));
-    // small visual delay so users see "uploading" -> "parsing" transition
     await new Promise((r) => setTimeout(r, 200));
     setImages((prev) => prev.map((x) => ({ ...x, state: "parsing" })));
 
@@ -181,7 +207,7 @@ function ImportPage() {
         setImages((prev) =>
           prev.map((x) => ({ ...x, state: "error", reason: r.reason })),
         );
-        toast.error(`识别失败：${r.reason}`);
+        toast.error(`识别失败:${r.reason}`);
       } else {
         setResult({
           parent: r.parent,
