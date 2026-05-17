@@ -173,9 +173,9 @@ function OverviewItems({ items }: { items: ParcelCardItem[] }) {
     );
   }
   const fmtJpy = (v: number | null | undefined) =>
-    v != null ? `¥${Number(v).toLocaleString()}` : "—";
+    v != null ? `JPY ${Number(v).toLocaleString()}` : "—";
   const fmtCny = (v: number | null | undefined) =>
-    v != null ? `￥${Number(v).toLocaleString()}` : "—";
+    v != null ? `RMB ${Number(v).toLocaleString()}` : "—";
   return (
     <div className="grid gap-3 md:grid-cols-2">
       {items.map((it, idx) => (

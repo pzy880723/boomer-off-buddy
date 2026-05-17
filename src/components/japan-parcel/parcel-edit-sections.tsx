@@ -37,26 +37,26 @@ const PARCEL_INFO: FieldDef[] = [
 ];
 
 const INTL_FEE: FieldDef[] = [
-  { key: "intl_freight_jpy", label: "国际运费 ¥", type: "number" },
-  { key: "intl_reinforce_jpy", label: "加固费 ¥", type: "number" },
-  { key: "intl_merge_fee_jpy", label: "合单费 ¥", type: "number" },
-  { key: "intl_send_fee_jpy", label: "发送费 ¥", type: "number" },
-  { key: "intl_photo_fee_jpy", label: "拍照费 ¥", type: "number" },
-  { key: "intl_keep_packaging_jpy", label: "保留包装 ¥", type: "number" },
-  { key: "intl_points_used", label: "积分抵扣 ¥", type: "number" },
-  { key: "tariff_jpy", label: "关税 ¥", type: "number" },
+  { key: "intl_freight_jpy", label: "国际运费 JPY ", type: "number" },
+  { key: "intl_reinforce_jpy", label: "加固费 JPY ", type: "number" },
+  { key: "intl_merge_fee_jpy", label: "合单费 JPY ", type: "number" },
+  { key: "intl_send_fee_jpy", label: "发送费 JPY ", type: "number" },
+  { key: "intl_photo_fee_jpy", label: "拍照费 JPY ", type: "number" },
+  { key: "intl_keep_packaging_jpy", label: "保留包装 JPY ", type: "number" },
+  { key: "intl_points_used", label: "积分抵扣 JPY ", type: "number" },
+  { key: "tariff_jpy", label: "关税 JPY ", type: "number" },
   { key: "intl_exchange_rate", label: "汇率", type: "number" },
   { key: "intl_ship_method", label: "运输方式" },
   { key: "intl_charge_method", label: "计费方式" },
   { key: "intl_pay_method", label: "支付方式" },
   { key: "intl_pay_at", label: "支付时间", type: "datetime" },
-  { key: "intl_total_jpy", label: "国际物流小计 ¥", type: "number" },
-  { key: "intl_total_cny", label: "国际物流小计 ￥", type: "number" },
+  { key: "intl_total_jpy", label: "国际物流小计 JPY ", type: "number" },
+  { key: "intl_total_cny", label: "国际物流小计 RMB ", type: "number" },
 ];
 
 const TOTAL_FIELDS: FieldDef[] = [
-  { key: "grand_total_jpy", label: "合计 JPY ¥", type: "number" },
-  { key: "grand_total_cny", label: "合计 CNY ￥", type: "number" },
+  { key: "grand_total_jpy", label: "合计 JPY", type: "number" },
+  { key: "grand_total_cny", label: "合计 RMB", type: "number" },
 ];
 
 function num(v: unknown): number {
@@ -217,8 +217,8 @@ export function ParcelEditSections({
         title="④ 合计费用"
         right={
           <div className="text-right text-xs text-muted-foreground">
-            建议值 ¥{suggestedJpy.toLocaleString()}
-            {suggestedCny ? ` ≈ ￥${suggestedCny.toLocaleString()}` : ""}
+            建议值 JPY {suggestedJpy.toLocaleString()}
+            {suggestedCny ? ` ≈ RMB ${suggestedCny.toLocaleString()}` : ""}
             <button
               type="button"
               className="ml-2 text-primary underline-offset-2 hover:underline"
@@ -242,22 +242,22 @@ export function ParcelEditSections({
         <div className="mt-3 grid grid-cols-1 gap-3 rounded-md bg-muted/30 p-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <div className="text-muted-foreground">商品总额</div>
-            <div className="mt-0.5 font-mono">¥{itemsTotalJpy.toLocaleString()}</div>
+            <div className="mt-0.5 font-mono">JPY {itemsTotalJpy.toLocaleString()}</div>
           </div>
           <div>
             <div className="text-muted-foreground">国际物流小计</div>
-            <div className="mt-0.5 font-mono">¥{intlTotal.toLocaleString()}</div>
+            <div className="mt-0.5 font-mono">JPY {intlTotal.toLocaleString()}</div>
           </div>
           <div>
             <div className="text-muted-foreground">日本侧合计 (JPY)</div>
-            <div className="mt-0.5 font-mono">¥{suggestedJpy.toLocaleString()}</div>
+            <div className="mt-0.5 font-mono">JPY {suggestedJpy.toLocaleString()}</div>
           </div>
           <div>
             <div className="text-muted-foreground">关税（按子订单税率，付人民币）</div>
             <div className="mt-0.5 font-mono">
-              {tariffCny != null ? `￥${tariffCny.toLocaleString()}` : "—"}
+              {tariffCny != null ? `RMB ${tariffCny.toLocaleString()}` : "—"}
               <span className="ml-1 text-[10px] text-muted-foreground">
-                (¥{tariffJpy.toLocaleString()})
+                (JPY {tariffJpy.toLocaleString()})
               </span>
             </div>
           </div>
@@ -305,9 +305,9 @@ export function ParcelOverviewSections({
         <div className="mt-3 flex justify-end text-xs">
           <span className="text-muted-foreground">小计：</span>
           <span className="ml-1 font-mono font-medium">
-            ¥{intlTotal.toLocaleString()}
+            JPY {intlTotal.toLocaleString()}
             {value.intl_total_cny != null
-              ? ` ≈ ￥${num(value.intl_total_cny).toLocaleString()}`
+              ? ` ≈ RMB ${num(value.intl_total_cny).toLocaleString()}`
               : ""}
           </span>
         </div>
@@ -317,25 +317,25 @@ export function ParcelOverviewSections({
         {itemsSlot}
         <div className="mt-3 flex justify-end text-xs">
           <span className="text-muted-foreground">商品总额：</span>
-          <span className="ml-1 font-mono font-medium">¥{itemsTotalJpy.toLocaleString()}</span>
+          <span className="ml-1 font-mono font-medium">JPY {itemsTotalJpy.toLocaleString()}</span>
         </div>
       </Section>
 
       <Section title="④ 合计费用">
         <div className="space-y-1.5 rounded-md bg-muted/30 p-3 text-xs">
-          <Line label="商品总额" v={`¥${itemsTotalJpy.toLocaleString()}`} />
-          <Line label="+ 国际物流" v={`¥${intlTotal.toLocaleString()}`} />
+          <Line label="商品总额" v={`JPY ${itemsTotalJpy.toLocaleString()}`} />
+          <Line label="+ 国际物流" v={`JPY ${intlTotal.toLocaleString()}`} />
           <Line
             label="= 日本侧合计 (JPY)"
-            v={`¥${grandJpy.toLocaleString()}`}
+            v={`JPY ${grandJpy.toLocaleString()}`}
             strong
           />
           <Line
             label="+ 关税（按子订单税率，国内付人民币）"
             v={
               tariffCny != null
-                ? `￥${tariffCny.toLocaleString()}`
-                : `¥${tariffJpy.toLocaleString()} (缺汇率)`
+                ? `RMB ${tariffCny.toLocaleString()}`
+                : `JPY ${tariffJpy.toLocaleString()} (缺汇率)`
             }
           />
         </div>
@@ -343,13 +343,13 @@ export function ParcelOverviewSections({
           <span className="text-sm text-muted-foreground">合计</span>
           {currency !== "cny" && (
             <span className="font-mono text-2xl font-semibold">
-              ¥{grandJpy.toLocaleString()}
+              JPY {grandJpy.toLocaleString()}
               <span className="ml-1 text-xs text-muted-foreground">JPY</span>
             </span>
           )}
           {currency !== "jpy" && grandCny != null && (
             <span className="font-mono text-2xl font-semibold">
-              ￥{grandCny.toLocaleString()}
+              RMB {grandCny.toLocaleString()}
               <span className="ml-1 text-xs text-muted-foreground">CNY</span>
             </span>
           )}
@@ -359,8 +359,8 @@ export function ParcelOverviewSections({
         </div>
         {currency === "both" && grandCny != null && (
           <div className="mt-1 text-right font-mono text-[11px] text-muted-foreground">
-            日本侧 ¥{grandJpy.toLocaleString()} + 关税{" "}
-            {tariffCny != null ? `￥${tariffCny.toLocaleString()}` : "—"}
+            日本侧 JPY {grandJpy.toLocaleString()} + 关税{" "}
+            {tariffCny != null ? `RMB ${tariffCny.toLocaleString()}` : "—"}
           </div>
         )}
       </Section>

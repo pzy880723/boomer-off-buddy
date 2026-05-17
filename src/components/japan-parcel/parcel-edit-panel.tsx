@@ -259,10 +259,10 @@ export function ParcelEditPanel({
               <div className="flex items-center gap-2">
                 <span className="font-mono">
                   {it.item_total_jpy != null
-                    ? `¥${Number(it.item_total_jpy).toLocaleString()}`
+                    ? `JPY ${Number(it.item_total_jpy).toLocaleString()}`
                     : "—"}
                   {it.item_total_cny != null
-                    ? ` (≈￥${Number(it.item_total_cny).toLocaleString()})`
+                    ? ` (≈RMB ${Number(it.item_total_cny).toLocaleString()})`
                     : ""}
                 </span>
                 <Button
@@ -294,15 +294,15 @@ export function ParcelEditPanel({
               </div>
             )}
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
-              <span>单价 {it.unit_price_jpy != null ? `¥${Number(it.unit_price_jpy).toLocaleString()}` : "—"}</span>
+              <span>单价 {it.unit_price_jpy != null ? `JPY ${Number(it.unit_price_jpy).toLocaleString()}` : "—"}</span>
               <span>× {it.quantity ?? "—"}</span>
               <span>重 {it.weight_g ?? "—"}g</span>
               <span>汇率 {it.exchange_rate ?? "—"}</span>
             </div>
             <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
-              <span>手续费 {it.service_fee_jpy != null ? `¥${Number(it.service_fee_jpy).toLocaleString()}` : "—"}</span>
-              <span>国内运费 {it.domestic_freight_jpy != null ? `¥${Number(it.domestic_freight_jpy).toLocaleString()}` : "—"}</span>
-              <span>补差 {it.freight_diff_jpy != null ? `¥${Number(it.freight_diff_jpy).toLocaleString()}` : "—"}</span>
+              <span>手续费 {it.service_fee_jpy != null ? `JPY ${Number(it.service_fee_jpy).toLocaleString()}` : "—"}</span>
+              <span>国内运费 {it.domestic_freight_jpy != null ? `JPY ${Number(it.domestic_freight_jpy).toLocaleString()}` : "—"}</span>
+              <span>补差 {it.freight_diff_jpy != null ? `JPY ${Number(it.freight_diff_jpy).toLocaleString()}` : "—"}</span>
             </div>
             <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
               <span>支付 {it.pay_method || "—"}</span>
@@ -313,7 +313,7 @@ export function ParcelEditPanel({
               <span>类目 {tariffCategoryLabel(it.tariff_category)}</span>
               <span>税率 {rateToPercent(it.tariff_rate)}</span>
               <span>
-                关税 ≈ {it.tariff_rate ? `¥${computeItemTariffJpy(it).toLocaleString()}` : "—"}
+                关税 ≈ {it.tariff_rate ? `JPY ${computeItemTariffJpy(it).toLocaleString()}` : "—"}
               </span>
             </div>
           </div>

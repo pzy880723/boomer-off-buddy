@@ -139,7 +139,7 @@ export function PackPriceCalculatorDialog({ open, onOpenChange, item, landedCny 
   };
 
   const piecesNum = Number(pieces) || 0;
-  const { pieceJpy, pieceCny } = computePiecePrice(
+  const { pieceCny } = computePiecePrice(
     item.item_total_jpy,
     landedCny,
     piecesNum > 0 ? piecesNum : null,
@@ -153,7 +153,7 @@ export function PackPriceCalculatorDialog({ open, onOpenChange, item, landedCny 
           id: item.id,
           pack_pieces: piecesNum > 0 ? piecesNum : null,
           pack_pieces_source: piecesNum > 0 ? source : null,
-          pack_unit_note: unit.trim() || null,
+          pack_unit_note: unit.trim() || (piecesNum > 0 ? "个" : null),
         },
       });
       toast.success("已保存");
@@ -199,13 +199,13 @@ export function PackPriceCalculatorDialog({ open, onOpenChange, item, landedCny 
                   {item.item_title}
                 </div>
               )}
-              <div className="mt-1 flex gap-3 font-mono tabular-nums">
-                <span>整件 ¥{Number(item.item_total_jpy ?? 0).toLocaleString()}</span>
-                {landedCny != null && (
-                  <span className="text-muted-foreground">
-                    到手 ￥{Math.round(landedCny).toLocaleString()}
-                  </span>
-                )}
+              <div className="mt-1 font-mono tabular-nums">
+                <span>
+                  到手{" "}
+                  {landedCny != null
+                    ? `RMB ${landedCny.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : "—"}
+                </span>
               </div>
             </div>
           </div>
@@ -256,19 +256,14 @@ export function PackPriceCalculatorDialog({ open, onOpenChange, item, landedCny 
           {/* 结果 */}
           {piecesNum > 0 && (
             <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
-              <div className="text-xs text-muted-foreground">单件成本</div>
-              <div className="mt-1 flex items-baseline gap-3 font-mono tabular-nums">
+              <div className="text-xs text-muted-foreground">单件到手成本</div>
+              <div className="mt-1 flex items-baseline gap-2 font-mono tabular-nums">
                 <span className="text-lg font-semibold">
-                  ¥{pieceJpy != null ? pieceJpy.toFixed(2) : "—"}
+                  {pieceCny != null ? `RMB ${pieceCny.toFixed(2)}` : "—"}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   / {unit || "个"}
                 </span>
-                {pieceCny != null && (
-                  <span className="ml-auto text-sm">
-                    到手 ￥{pieceCny.toFixed(2)} / {unit || "个"}
-                  </span>
-                )}
               </div>
             </div>
           )}
