@@ -28,6 +28,8 @@ import {
   type ParsedItem,
   type ParsedTimelineEntry,
 } from "@/lib/meruki-parse.functions";
+import { peekOrderNo } from "@/lib/recognize.functions";
+import { lookupExistingParcelByOrderNo } from "@/lib/japan-parcel.functions";
 
 export const Route = createFileRoute("/purchase/japan-parcel/import")({
   head: () => ({ meta: [{ title: "截图批量导入 · BOOMER OFF" }] }),
@@ -94,16 +96,30 @@ function StepBar({ current }: { current: StepKey }) {
   );
 }
 
+type ExistingMatch = {
+  id: string;
+  source_order_no: string | null;
+  created_at: string;
+  status: string;
+  status_text: string | null;
+  item_title: string | null;
+  item_title_cn: string | null;
+};
+
 function ImportPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const parseFn = useServerFn(parseMerukiParcelScreenshots);
   const importFn = useServerFn(importParsedParcel);
+  const peekFn = useServerFn(peekOrderNo);
+  const lookupFn = useServerFn(lookupExistingParcelByOrderNo);
 
   const [images, setImages] = useState<ImageItem[]>([]);
   const [result, setResult] = useState<ParseResult | null>(null);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [existing, setExisting] = useState<ExistingMatch | null>(null);
+  const [peeking, setPeeking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const currentStep: StepKey = result
@@ -141,13 +157,39 @@ function ImportPage() {
     setImages((prev) => prev.filter((x) => x.id !== id));
   };
 
-  const runParse = async () => {
+  const runParse = async (opts: { force?: boolean } = {}) => {
     if (images.length === 0) return;
-    setParsing(true);
     setParseError(null);
     setResult(null);
+    setExisting(null);
+
+    // 预扫第一张图，命中已存在则拦截
+    if (!opts.force) {
+      setPeeking(true);
+      try {
+        const peek = await peekFn({
+          data: {
+            image_base64: images[0].dataUrl,
+            mime_type: images[0].mime,
+          },
+        });
+        if (peek.ok && peek.order_no) {
+          const lk = await lookupFn({ data: { order_nos: [peek.order_no] } });
+          if (lk.matches.length > 0) {
+            setExisting(lk.matches[0] as ExistingMatch);
+            setPeeking(false);
+            return;
+          }
+        }
+      } catch {
+        // 预扫失败不阻塞，直接走完整识别
+      } finally {
+        setPeeking(false);
+      }
+    }
+
+    setParsing(true);
     setImages((prev) => prev.map((x) => ({ ...x, state: "uploading" })));
-    // small visual delay so users see "uploading" -> "parsing" transition
     await new Promise((r) => setTimeout(r, 200));
     setImages((prev) => prev.map((x) => ({ ...x, state: "parsing" })));
 
@@ -165,7 +207,7 @@ function ImportPage() {
         setImages((prev) =>
           prev.map((x) => ({ ...x, state: "error", reason: r.reason })),
         );
-        toast.error(`识别失败：${r.reason}`);
+        toast.error(`识别失败:${r.reason}`);
       } else {
         setResult({
           parent: r.parent,
@@ -356,25 +398,66 @@ function ImportPage() {
                     setImages([]);
                     setResult(null);
                     setParseError(null);
+                    setExisting(null);
                   }}
-                  disabled={parsing}
+                  disabled={parsing || peeking}
                 >
                   清空
                 </Button>
                 <Button
                   size="sm"
                   className="bg-gradient-brand hover:opacity-90"
-                  disabled={parsing || images.length === 0}
-                  onClick={runParse}
+                  disabled={parsing || peeking || images.length === 0}
+                  onClick={() => runParse()}
                 >
-                  {parsing ? (
+                  {parsing || peeking ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  {result ? "重新识别" : "开始 AI 识别"}
+                  {peeking ? "查重中…" : result ? "重新识别" : "开始 AI 识别"}
                 </Button>
               </div>
+
+              {existing && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs">
+                  <div className="mb-2 font-medium text-amber-900">
+                    ⚠️ 该订单已存在,无需再次识别
+                  </div>
+                  <div className="space-y-0.5 text-amber-900/80">
+                    <div>订单号:<span className="font-mono">{existing.source_order_no}</span></div>
+                    <div>创建时间:{new Date(existing.created_at).toLocaleString("zh-CN")}</div>
+                    <div>当前状态:{existing.status_text ?? existing.status}</div>
+                    {(existing.item_title_cn ?? existing.item_title) && (
+                      <div className="truncate">标题:{existing.item_title_cn ?? existing.item_title}</div>
+                    )}
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => nav({ to: "/purchase/japan-parcel/$id", params: { id: existing.id } })}
+                    >
+                      打开包裹
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => runParse({ force: true })}
+                      disabled={parsing}
+                    >
+                      仍要重新识别
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setExisting(null)}
+                    >
+                      取消
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {parseError && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
@@ -493,7 +576,7 @@ function ImportPage() {
               </div>
 
               <div className="flex justify-end gap-2 border-t pt-3">
-                <Button variant="outline" size="sm" onClick={runParse} disabled={parsing}>
+                <Button variant="outline" size="sm" onClick={() => runParse({ force: true })} disabled={parsing}>
                   <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> 重新识别
                 </Button>
                 {result.already_exists && (

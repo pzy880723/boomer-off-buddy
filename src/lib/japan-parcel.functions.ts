@@ -393,3 +393,22 @@ export const bulkSetItemTitlesCn = createServerFn({ method: "POST" })
     }
     return { ok: true, count };
   });
+
+// 根据 source_order_no 批量查重，识别前预扫用
+export const lookupExistingParcelByOrderNo = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        order_nos: z.array(z.string().min(1).max(64)).min(1).max(20),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { data: rows, error } = await supabaseAdmin
+      .from("japan_parcels")
+      .select("id, source_order_no, created_at, status, status_text, item_title, item_title_cn")
+      .is("deleted_at", null)
+      .in("source_order_no", data.order_nos);
+    if (error) throw new Error(error.message);
+    return { matches: rows ?? [] };
+  });
