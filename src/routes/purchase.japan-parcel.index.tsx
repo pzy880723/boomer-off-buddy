@@ -516,7 +516,7 @@ function JapanParcelList() {
                                 {it.item_title}
                               </div>
                             )}
-                            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                               <span>包裹 {r.tracking_no || r.source_order_no || r.id.slice(0, 8)}</span>
                               {it?.tariff_category && (
                                 <span className="rounded bg-muted px-1 py-px text-[10px]">
@@ -524,6 +524,31 @@ function JapanParcelList() {
                                   {it.tariff_rate ? ` ${(Number(it.tariff_rate) * 100).toFixed(0)}%` : ""}
                                 </span>
                               )}
+                              {it?.pack_pieces && it.pack_pieces > 1 && (() => {
+                                const { pieceCny, pieceJpy } = computePiecePrice(
+                                  it.item_total_jpy,
+                                  landed?.landedCny ?? null,
+                                  it.pack_pieces,
+                                );
+                                const u = it.pack_unit_note || "个";
+                                const tag =
+                                  it.pack_pieces_source === "title"
+                                    ? "📝"
+                                    : it.pack_pieces_source === "image"
+                                      ? "🖼️"
+                                      : "";
+                                return (
+                                  <span className="rounded bg-primary/10 px-1 py-px text-[10px] text-primary">
+                                    拆 {it.pack_pieces}{u} ·{" "}
+                                    {pieceCny != null
+                                      ? `￥${pieceCny.toFixed(2)}/${u}`
+                                      : pieceJpy != null
+                                        ? `¥${pieceJpy.toFixed(0)}/${u}`
+                                        : "—"}
+                                    {tag && <span className="ml-0.5">{tag}</span>}
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </TableCell>
                           <TableCell className="text-center text-sm tabular-nums">
@@ -591,14 +616,29 @@ function JapanParcelList() {
                             )}
                           </TableCell>
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 px-2 text-[11px]"
-                              onClick={() => openCard("overview")}
-                            >
-                              打开包裹
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              {it && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  title="拆包单价计算"
+                                  onClick={() =>
+                                    setPackCalc({ item: it, landedCny: landed?.landedCny ?? null })
+                                  }
+                                >
+                                  <Calculator className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 text-[11px]"
+                                onClick={() => openCard("overview")}
+                              >
+                                打开包裹
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
