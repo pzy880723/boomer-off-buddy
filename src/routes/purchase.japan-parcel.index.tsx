@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Flag,
   Copy,
+  Calculator,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ import {
   simplifyStatus,
   getDisplayTitle,
   computeParcelItemLanded,
+  computePiecePrice,
 } from "@/lib/japan-parcel.helpers";
 import {
   HoverCard,
@@ -67,6 +69,11 @@ import { ClickableThumb } from "@/components/japan-parcel/image-lightbox";
 const ParcelCardDialog = lazy(() =>
   import("@/components/japan-parcel/parcel-card-dialog").then((m) => ({
     default: m.ParcelCardDialog,
+  })),
+);
+const PackPriceCalculatorDialog = lazy(() =>
+  import("@/components/japan-parcel/pack-price-calculator-dialog").then((m) => ({
+    default: m.PackPriceCalculatorDialog,
   })),
 );
 
@@ -109,6 +116,9 @@ type ItemRow = {
   position?: number | null;
   tariff_category?: string | null;
   tariff_rate?: number | null;
+  pack_pieces?: number | null;
+  pack_pieces_source?: string | null;
+  pack_unit_note?: string | null;
 };
 
 type ParcelRow = ParcelCardData & {
@@ -142,6 +152,7 @@ function JapanParcelList() {
   const [search, setSearch] = useState("");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [openTab, setOpenTab] = useState<"overview" | "edit">("overview");
+  const [packCalc, setPackCalc] = useState<{ item: ItemRow; landedCny: number | null } | null>(null);
   const [currency] = useCurrencyDisplay();
   const [viewMode] = useParcelViewMode();
   const [sort, setSort] = useState<SortState>({ field: "intl_pay_at", dir: "desc" });
@@ -505,7 +516,7 @@ function JapanParcelList() {
                                 {it.item_title}
                               </div>
                             )}
-                            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                               <span>包裹 {r.tracking_no || r.source_order_no || r.id.slice(0, 8)}</span>
                               {it?.tariff_category && (
                                 <span className="rounded bg-muted px-1 py-px text-[10px]">
@@ -513,6 +524,31 @@ function JapanParcelList() {
                                   {it.tariff_rate ? ` ${(Number(it.tariff_rate) * 100).toFixed(0)}%` : ""}
                                 </span>
                               )}
+                              {it?.pack_pieces && it.pack_pieces > 1 && (() => {
+                                const { pieceCny, pieceJpy } = computePiecePrice(
+                                  it.item_total_jpy,
+                                  landed?.landedCny ?? null,
+                                  it.pack_pieces,
+                                );
+                                const u = it.pack_unit_note || "个";
+                                const tag =
+                                  it.pack_pieces_source === "title"
+                                    ? "📝"
+                                    : it.pack_pieces_source === "image"
+                                      ? "🖼️"
+                                      : "";
+                                return (
+                                  <span className="rounded bg-primary/10 px-1 py-px text-[10px] text-primary">
+                                    拆 {it.pack_pieces}{u} ·{" "}
+                                    {pieceCny != null
+                                      ? `￥${pieceCny.toFixed(2)}/${u}`
+                                      : pieceJpy != null
+                                        ? `¥${pieceJpy.toFixed(0)}/${u}`
+                                        : "—"}
+                                    {tag && <span className="ml-0.5">{tag}</span>}
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </TableCell>
                           <TableCell className="text-center text-sm tabular-nums">
@@ -580,14 +616,29 @@ function JapanParcelList() {
                             )}
                           </TableCell>
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 px-2 text-[11px]"
-                              onClick={() => openCard("overview")}
-                            >
-                              打开包裹
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              {it && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  title="拆包单价计算"
+                                  onClick={() =>
+                                    setPackCalc({ item: it, landedCny: landed?.landedCny ?? null })
+                                  }
+                                >
+                                  <Calculator className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 text-[11px]"
+                                onClick={() => openCard("overview")}
+                              >
+                                打开包裹
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -831,6 +882,17 @@ function JapanParcelList() {
             parcel={openParcel}
             items={(openParcel?.japan_parcel_items ?? []) as ParcelCardItem[]}
             defaultTab={openTab}
+          />
+        </Suspense>
+      )}
+
+      {packCalc && (
+        <Suspense fallback={null}>
+          <PackPriceCalculatorDialog
+            open={!!packCalc}
+            onOpenChange={(o) => !o && setPackCalc(null)}
+            item={packCalc.item}
+            landedCny={packCalc.landedCny}
           />
         </Suspense>
       )}
