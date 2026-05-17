@@ -396,18 +396,32 @@ function JapanParcelList() {
                 </Button>
               </>
             ) : (
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={bulkMut.isPending}
-                onClick={() => {
-                  if (confirm(`确认删除选中的 ${selected.size} 条订单？将移入回收站。`))
-                    bulkMut.mutate(Array.from(selected));
-                }}
-              >
-                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                批量删除
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={signMut.isPending}
+                  onClick={() => {
+                    if (confirm(`确认将选中的 ${selected.size} 条包裹标记为已签收？`))
+                      signMut.mutate(Array.from(selected));
+                  }}
+                >
+                  <PackageCheck className="mr-1.5 h-3.5 w-3.5" />
+                  批量签收
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={bulkMut.isPending}
+                  onClick={() => {
+                    if (confirm(`确认删除选中的 ${selected.size} 条订单？将移入回收站。`))
+                      bulkMut.mutate(Array.from(selected));
+                  }}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  批量删除
+                </Button>
+              </>
             )}
           </div>
         </div>
