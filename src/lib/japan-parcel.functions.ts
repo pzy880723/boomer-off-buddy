@@ -104,7 +104,7 @@ export const listJapanParcels = createServerFn({ method: "GET" })
     let q = supabaseAdmin
       .from("japan_parcels")
       .select(
-        "id,source,source_order_no,tracking_no,status,item_title,item_title_cn,item_image_url,total_jpy,intl_total_jpy,intl_exchange_rate,intl_pay_at,tariff_jpy,tariff_cny,grand_total_jpy,grand_total_cny,purchased_at,created_at,is_problem,deleted_at, japan_parcel_items(id, item_title, item_title_cn, item_image_url, item_total_jpy, item_total_cny, unit_price_jpy, quantity, sub_order_no, position, tariff_category, tariff_rate, freight_diff_jpy)",
+        "id,source,source_order_no,tracking_no,status,item_title,item_title_cn,item_image_url,total_jpy,intl_total_jpy,intl_exchange_rate,intl_pay_at,tariff_jpy,tariff_cny,grand_total_jpy,grand_total_cny,purchased_at,created_at,is_problem,deleted_at, japan_parcel_items(id, item_title, item_title_cn, item_image_url, item_total_jpy, item_total_cny, unit_price_jpy, quantity, sub_order_no, position, tariff_category, tariff_rate, freight_diff_jpy, pack_pieces, pack_pieces_source, pack_unit_note)",
       )
       .order(sortField, { ascending: sortDir === "asc", nullsFirst: false })
       .order("created_at", { ascending: false })
@@ -301,6 +301,9 @@ const ItemUpdateSchema = z.object({
   notes: z.string().nullable().optional(),
   tariff_category: z.string().nullable().optional(),
   tariff_rate: z.number().nullable().optional(),
+  pack_pieces: z.number().int().nullable().optional(),
+  pack_pieces_source: z.string().nullable().optional(),
+  pack_unit_note: z.string().nullable().optional(),
 });
 
 export const updateParcelItem = createServerFn({ method: "POST" })
