@@ -145,6 +145,7 @@ function JapanParcelList() {
   const updateParcel = useServerFn(updateJapanParcel);
   const delOne = useServerFn(deleteJapanParcel);
   const delMany = useServerFn(bulkDeleteJapanParcels);
+  const bulkSetStatus = useServerFn(bulkUpdateJapanParcelStatus);
   const setProblemFn = useServerFn(setJapanParcelProblem);
   const restoreFn = useServerFn(restoreJapanParcels);
   const purgeFn = useServerFn(purgeJapanParcels);
