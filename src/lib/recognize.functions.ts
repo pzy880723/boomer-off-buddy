@@ -663,3 +663,74 @@ export const extractSubItem = createServerFn({ method: "POST" })
     });
     return { ...r, index: data.index, data: normalizeItem(r.data, data.block) };
   });
+
+// ====================================================================
+// 预扫订单号（识别前轻量查重）
+//   - 文字模式：复用本地正则 hints，0 token
+//   - 截图模式：用最便宜的视觉模型只问一句订单号
+// ====================================================================
+const PeekSchema = z.object({
+  order_no: z.string().nullable().optional(),
+});
+
+export const peekOrderNo = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        text: z.string().min(1).max(50000).optional(),
+        image_base64: z.string().min(1).optional(),
+        mime_type: z.string().default("image/png").optional(),
+      })
+      .refine((d) => !!d.text || !!d.image_base64, "text or image_base64 required")
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    // 文字：正则直接拿
+    if (data.text) {
+      const cleaned = preprocess(data.text);
+      const hints = regexHints(cleaned);
+      return {
+        ok: true as const,
+        order_no: hints.source_order_no,
+        source: "regex" as const,
+      };
+    }
+    // 截图：最便宜的视觉模型
+    try {
+      const dataUrl = data.image_base64!.startsWith("data:")
+        ? data.image_base64!
+        : `data:${data.mime_type ?? "image/png"};base64,${data.image_base64}`;
+      const { output } = await generateText({
+        model: getModel("google/gemini-2.5-flash-lite"),
+        output: Output.object({ schema: PeekSchema }),
+        messages: [
+          {
+            role: "system",
+            content:
+              "你是订单号提取助手。只看图片中的『订单号』『注文番号』『受付番号』『订单编号』标签后面紧跟的那串字符（通常是 8 位以上的字母数字混合），返回 JSON {\"order_no\": \"...\"}。没有就返回 {\"order_no\": null}。不要解释。",
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "图片中的订单号是？" },
+              { type: "image", image: dataUrl },
+            ],
+          },
+        ],
+      });
+      const out = output as z.infer<typeof PeekSchema>;
+      const orderNo = (out.order_no ?? "").trim();
+      return {
+        ok: true as const,
+        order_no: orderNo && orderNo.length >= 6 ? orderNo : null,
+        source: "ai-lite" as const,
+      };
+    } catch (e) {
+      return {
+        ok: false as const,
+        order_no: null,
+        source: "ai-lite" as const,
+        reason: (e as Error).message,
+      };
+    }
+  });
