@@ -19,6 +19,7 @@ import {
 } from "@/lib/pack-pieces.functions";
 import { updateParcelItem } from "@/lib/japan-parcel.functions";
 import { computePiecePrice } from "@/lib/japan-parcel.helpers";
+import { ClickableThumb } from "@/components/japan-parcel/image-lightbox";
 
 export interface PackCalcItem {
   id: string;
