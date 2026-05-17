@@ -96,16 +96,30 @@ function StepBar({ current }: { current: StepKey }) {
   );
 }
 
+type ExistingMatch = {
+  id: string;
+  source_order_no: string | null;
+  created_at: string;
+  status: string;
+  status_text: string | null;
+  item_title: string | null;
+  item_title_cn: string | null;
+};
+
 function ImportPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const parseFn = useServerFn(parseMerukiParcelScreenshots);
   const importFn = useServerFn(importParsedParcel);
+  const peekFn = useServerFn(peekOrderNo);
+  const lookupFn = useServerFn(lookupExistingParcelByOrderNo);
 
   const [images, setImages] = useState<ImageItem[]>([]);
   const [result, setResult] = useState<ParseResult | null>(null);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [existing, setExisting] = useState<ExistingMatch | null>(null);
+  const [peeking, setPeeking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const currentStep: StepKey = result
