@@ -1,61 +1,61 @@
 ## 目标
 
-在跑完整 AI 识别管线**之前**先轻量提取 `source_order_no`，去 `japan_parcels` 表查一下：
-- 命中 → 弹提示"该订单已在 N 月 N 日新建为包裹 #XXXX"，给三个动作：**打开已有包裹** / **仍要重新识别（覆盖）** / **取消**。
-- 未命中或用户坚持 → 继续走原识别流程。
+把这个 TanStack Start 项目部署到腾讯云（`erp.boomeroff.com`），同时解决"看不到 `SUPABASE_SERVICE_ROLE_KEY`"的问题。
 
-覆盖 `/import`（截图批量）和 `/new`（单条 + SmartRecognizePanel）两个入口。
+## 核心难点回顾
 
-## 改动
+这个项目不是纯前端 SPA，它是 **TanStack Start 全栈应用**：
+- 浏览器里跑的 React 页面 → 只需要 publishable key（已经有了）
+- 服务端 server functions（`src/lib/*.functions.ts`）→ 用 `supabaseAdmin` 客户端访问数据库，必须有 `SUPABASE_SERVICE_ROLE_KEY`
 
-### 1. 新增 serverFn `lookupExistingParcelByOrderNo`
-文件：`src/lib/japan-parcel.functions.ts`
+所以腾讯云上必须跑一个 Node 服务（不能只是 nginx 发静态文件），它需要这 3 个环境变量：
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` ← 这个 Lovable UI 里看不见
 
-```ts
-input: { order_nos: string[] (1..20) }   // 支持一次查多个
-return: { matches: Array<{ source_order_no, id, created_at, status, item_title }> }
+另外还有 2 个业务密钥也要带过去：
+- `MERUKI_ENC_KEY`（meruki 账号密码加密用）
+- `LOVABLE_API_KEY`（AI 识别调用）
+
+## 解决方案：用 Lovable 的轮换工具拿新 key
+
+Lovable 后台有个 `rotate_api_keys` 工具，可以**生成一套全新的 Supabase API keys**（包括 publishable + service_role），并自动写入项目的 `.env` 和 Lovable Cloud 部署。
+
+执行后我能在工具返回里看到新的 service_role key，直接告诉你，你拷贝到腾讯云的 `.env` 就行。
+
+**副作用**：
+- Lovable 自己托管的 `boomer-off-buddy.lovable.app` 会自动用新 key，无感切换，不会挂
+- 老的 service_role key 立即失效，外面如果有别处用就会断（这个项目应该没有）
+- 浏览器扩展、Edge Functions 等也自动用新 key
+
+## 执行步骤
+
+```text
+┌─ Lovable 端 ──────────────────────────────┐
+│ 1. 我调用 rotate_api_keys                  │
+│ 2. 拿到新 SERVICE_ROLE_KEY，发给你         │
+│ 3. Lovable Cloud 自动用新 key 重新部署     │
+└────────────────────────────────────────────┘
+                    ↓
+┌─ 腾讯云端（你执行）──────────────────────────┐
+│ 4. git clone 项目到服务器                   │
+│ 5. 写 .env（5 个环境变量）                  │
+│ 6. bun install && bun run build            │
+│ 7. PM2 跑 node .output/server/index.mjs    │
+│ 8. nginx 反代 erp.boomeroff.com → :3000    │
+└────────────────────────────────────────────┘
 ```
-只 `select id, source_order_no, created_at, status, item_title` from `japan_parcels` where `deleted_at is null and source_order_no in (...)`，1000 行内绰绰有余。
 
-### 2. 预扫订单号 serverFn `peekOrderNo`
-文件：`src/lib/recognize.functions.ts`
+## 我会准备好给你的东西
 
-- **文字模式**：直接复用现有 `segmentParcelText` 里的 `hints.source_order_no` 正则逻辑，抽离成一个纯函数即可，0 token。
-- **截图模式**：用最便宜的模型（`gemini-2.5-flash-lite`）只问一句"返回页面上的订单编号 / 注文番号 / 受付番号，没有就 null"，输出 `{ order_no: string|null }`。比完整识别便宜一个数量级。
+1. **新的 service_role key**（轮换后第一时间发你）
+2. **完整 `.env` 模板**，照抄改值即可
+3. **腾讯云一键部署脚本**：包含 git clone、依赖安装、build、PM2 启动、nginx 配置（SSL + WebSocket + 缓存）
+4. **回滚方案**：如果新 key 出问题，再调一次 rotate 就行
 
-入参：`{ text?: string, image_base64?: string, mime_type?: string }`，出参 `{ order_no: string | null, source: "regex" | "ai-lite" }`。
+## 需要你确认两件事
 
-### 3. `/purchase/japan-parcel/import` 串预扫
-文件：`src/routes/purchase.japan-parcel.import.tsx`
+1. **是否 OK 轮换 Supabase keys**？（不会丢数据，只是换钥匙，Lovable 自己的部署无感切换）
+2. **腾讯云那台机器**：是不是有 Node 18+ 环境？没有的话我把 nvm 安装命令一起塞进脚本
 
-`runParse` 流程改成：
-```
-peekOrderNo(第一张截图)  ──► lookupExistingParcelByOrderNo
-  └─ 命中 → 不调 parseMerukiParcelScreenshots，直接展示
-              "已存在包裹 #XXXX（YYYY-MM-DD 建）" 的卡片，三个按钮：
-              [打开包裹] [仍要重新识别] [取消]
-  └─ 未命中 → 正常调用 parseMerukiParcelScreenshots
-```
-"仍要重新识别"走原路径，最后还能在审阅页用"覆盖更新"。
-
-### 4. `/purchase/japan-parcel/new` 串预扫
-文件：`src/components/japan-parcel/smart-recognize-panel.tsx`
-
-`runPipeline` 开头：先做 `peekOrderNo`（文字模式走 regex；截图模式走 ai-lite）→ `lookupExistingParcelByOrderNo`。命中就在面板里渲染一条 amber 提示带跳转链接 + "仍要识别"按钮，不直接跑 segmentation。
-
-为避免侵入 `SmartRecognizePanel` 现有时间线 UI，把"已存在拦截"渲染成时间线的第 0 步 `已存在订单 #XXXX`（warn 状态，可点击展开看创建时间 / 状态 / 标题），下面跟一个 inline 链接 `打开 →` 和 `继续识别（覆盖）` 按钮。
-
-### 5. 详情/列表的辅助
-不动列表。命中后的"打开包裹"链接直接 `/purchase/japan-parcel/$id`。
-
-## 不改动
-- 状态字典、RLS、识别管线本身的步骤拆分都不动。
-- `importParsedParcel` 已有的 `overwrite` 行为保持现状，预扫只是提前告知，不改写入逻辑。
-- 没有 `source_order_no` 的特殊订单（旧数据/没单号）一律走原路径，预扫直接放行。
-
-## 技术细节
-
-- `peekOrderNo` 截图版用 `lovable/gemini-2.5-flash-lite` 调一次即可；temperature 0；强约束 JSON schema 返回。
-- 预扫超时设 5s，失败 fallback 到"放行 + 跑完整识别"，绝不阻塞用户主流程。
-- 预扫 + 查库一起最多增加 ~1s，远比一次完整识别便宜。
-- 不持久化预扫结果。
+确认后我直接执行 `rotate_api_keys` 并把新 key + 脚本发你。
