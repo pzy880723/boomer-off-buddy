@@ -31,6 +31,9 @@ export type Database = {
           item_total_jpy: number | null
           merchant_order_no: string | null
           notes: string | null
+          pack_pieces: number | null
+          pack_pieces_source: string | null
+          pack_unit_note: string | null
           parent_id: string
           pay_at: string | null
           pay_method: string | null
@@ -62,6 +65,9 @@ export type Database = {
           item_total_jpy?: number | null
           merchant_order_no?: string | null
           notes?: string | null
+          pack_pieces?: number | null
+          pack_pieces_source?: string | null
+          pack_unit_note?: string | null
           parent_id: string
           pay_at?: string | null
           pay_method?: string | null
@@ -93,6 +99,9 @@ export type Database = {
           item_total_jpy?: number | null
           merchant_order_no?: string | null
           notes?: string | null
+          pack_pieces?: number | null
+          pack_pieces_source?: string | null
+          pack_unit_note?: string | null
           parent_id?: string
           pay_at?: string | null
           pay_method?: string | null
