@@ -248,6 +248,16 @@ function JapanParcelList() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  const signMut = useMutation({
+    mutationFn: (ids: string[]) => bulkSetStatus({ data: { ids, status: "delivered" } }),
+    onSuccess: (r) => {
+      toast.success(`已签收 ${r.count} 条`);
+      setSelected(new Set());
+      invalidateAll();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   const restoreMut = useMutation({
     mutationFn: (ids: string[]) => restoreFn({ data: { ids } }),
     onSuccess: (r) => {
