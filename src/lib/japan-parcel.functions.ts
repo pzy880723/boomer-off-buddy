@@ -271,7 +271,7 @@ export const bulkUpdateJapanParcelStatus = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data }) => {
-    const patch: Record<string, unknown> = { status: data.status };
+    const patch: { status: string; received_at?: string } = { status: data.status };
     if (data.status === "delivered") {
       patch.received_at = new Date().toISOString();
     }
