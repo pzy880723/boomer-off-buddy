@@ -222,6 +222,19 @@ export function computeParcelItemLanded(
   return map;
 }
 
+// 拆包单价：把整件商品的金额/到手价摊到每个小件
+export function computePiecePrice(
+  itemJpy: number | null | undefined,
+  landedCny: number | null | undefined,
+  pieces: number | null | undefined,
+): { pieceJpy: number | null; pieceCny: number | null } {
+  const n = Number(pieces) || 0;
+  if (n <= 0) return { pieceJpy: null, pieceCny: null };
+  const pieceJpy = itemJpy != null ? Number(itemJpy) / n : null;
+  const pieceCny = landedCny != null ? Number(landedCny) / n : null;
+  return { pieceJpy, pieceCny };
+}
+
 // 包裹列表显示标题：优先取第一个子订单的中文标题
 export function getDisplayTitle(
   parcel: { item_title?: string | null; item_title_cn?: string | null; source_order_no?: string | null },
