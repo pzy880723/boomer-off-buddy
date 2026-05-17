@@ -55,8 +55,8 @@ const INTL_FEE: FieldDef[] = [
 ];
 
 const TOTAL_FIELDS: FieldDef[] = [
-  { key: "grand_total_jpy", label: "合计 JPY JPY ", type: "number" },
-  { key: "grand_total_cny", label: "合计 CNY RMB ", type: "number" },
+  { key: "grand_total_jpy", label: "合计 JPY", type: "number" },
+  { key: "grand_total_cny", label: "合计 RMB", type: "number" },
 ];
 
 function num(v: unknown): number {
