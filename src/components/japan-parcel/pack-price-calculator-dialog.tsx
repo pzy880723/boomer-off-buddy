@@ -139,7 +139,7 @@ export function PackPriceCalculatorDialog({ open, onOpenChange, item, landedCny 
   };
 
   const piecesNum = Number(pieces) || 0;
-  const { pieceJpy, pieceCny } = computePiecePrice(
+  const { pieceCny } = computePiecePrice(
     item.item_total_jpy,
     landedCny,
     piecesNum > 0 ? piecesNum : null,
