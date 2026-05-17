@@ -760,8 +760,8 @@ function JapanParcelList() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex justify-end gap-0.5">
+                      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-center gap-0.5">
                           {isTrash ? (
                             <>
                               <Button
