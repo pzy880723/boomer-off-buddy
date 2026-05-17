@@ -75,12 +75,15 @@ export function computeCompleteness(p: ParcelInput): number {
 
 export function formatJpy(v: number | null | undefined): string {
   if (v == null) return "—";
-  return `¥${Number(v).toLocaleString()}`;
+  return `JPY ${Math.round(Number(v)).toLocaleString()}`;
 }
 
-export function formatCny(v: number | null | undefined): string {
+export function formatCny(v: number | null | undefined, digits = 2): string {
   if (v == null) return "—";
-  return `￥${Number(v).toLocaleString()}`;
+  return `RMB ${Number(v).toLocaleString(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}`;
 }
 
 // ===== 关税与合计计算 =====
