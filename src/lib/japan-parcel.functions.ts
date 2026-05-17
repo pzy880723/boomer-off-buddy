@@ -263,6 +263,26 @@ export const deleteJapanParcel = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const bulkUpdateJapanParcelStatus = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z.object({
+      ids: z.array(z.string().uuid()).min(1).max(500),
+      status: z.string().min(1),
+    }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const patch: { status: string; received_at?: string } = { status: data.status };
+    if (data.status === "delivered") {
+      patch.received_at = new Date().toISOString();
+    }
+    const { error } = await supabaseAdmin
+      .from("japan_parcels")
+      .update(patch)
+      .in("id", data.ids);
+    if (error) throw new Error(error.message);
+    return { ok: true, count: data.ids.length };
+  });
+
 export const bulkDeleteJapanParcels = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     z.object({ ids: z.array(z.string().uuid()).min(1).max(500) }).parse(input),

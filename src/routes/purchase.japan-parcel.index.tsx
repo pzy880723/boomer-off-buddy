@@ -17,6 +17,7 @@ import {
   Flag,
   Copy,
   Calculator,
+  PackageCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ import {
   updateJapanParcel,
   deleteJapanParcel,
   bulkDeleteJapanParcels,
+  bulkUpdateJapanParcelStatus,
   getJapanParcelCounts,
   setJapanParcelProblem,
   restoreJapanParcels,
@@ -143,6 +145,7 @@ function JapanParcelList() {
   const updateParcel = useServerFn(updateJapanParcel);
   const delOne = useServerFn(deleteJapanParcel);
   const delMany = useServerFn(bulkDeleteJapanParcels);
+  const bulkSetStatus = useServerFn(bulkUpdateJapanParcelStatus);
   const setProblemFn = useServerFn(setJapanParcelProblem);
   const restoreFn = useServerFn(restoreJapanParcels);
   const purgeFn = useServerFn(purgeJapanParcels);
@@ -239,6 +242,16 @@ function JapanParcelList() {
     mutationFn: (ids: string[]) => delMany({ data: { ids } }),
     onSuccess: (r) => {
       toast.success(`已将 ${r.count} 条移入回收站`);
+      setSelected(new Set());
+      invalidateAll();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const signMut = useMutation({
+    mutationFn: (ids: string[]) => bulkSetStatus({ data: { ids, status: "delivered" } }),
+    onSuccess: (r) => {
+      toast.success(`已签收 ${r.count} 条`);
       setSelected(new Set());
       invalidateAll();
     },
@@ -383,18 +396,32 @@ function JapanParcelList() {
                 </Button>
               </>
             ) : (
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={bulkMut.isPending}
-                onClick={() => {
-                  if (confirm(`确认删除选中的 ${selected.size} 条订单？将移入回收站。`))
-                    bulkMut.mutate(Array.from(selected));
-                }}
-              >
-                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                批量删除
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={signMut.isPending}
+                  onClick={() => {
+                    if (confirm(`确认将选中的 ${selected.size} 条包裹标记为已签收？`))
+                      signMut.mutate(Array.from(selected));
+                  }}
+                >
+                  <PackageCheck className="mr-1.5 h-3.5 w-3.5" />
+                  批量签收
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={bulkMut.isPending}
+                  onClick={() => {
+                    if (confirm(`确认删除选中的 ${selected.size} 条订单？将移入回收站。`))
+                      bulkMut.mutate(Array.from(selected));
+                  }}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  批量删除
+                </Button>
+              </>
             )}
           </div>
         </div>
