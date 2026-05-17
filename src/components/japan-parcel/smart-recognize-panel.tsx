@@ -376,12 +376,46 @@ export function SmartRecognizePanel({ onApply }: Props) {
             disabled={
               running || (smartTab === "text" ? !smartText.trim() : !smartImage)
             }
-            onClick={runPipeline}
+            onClick={() => runPipeline()}
           >
             <Sparkles className="mr-1.5 h-3.5 w-3.5" />
             {running ? "识别中…" : "一键识别并填充"}
           </Button>
         </div>
+
+        {existing && (
+          <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs">
+            <div className="mb-2 font-medium text-amber-900">
+              ⚠️ 该订单已存在,无需再次识别
+            </div>
+            <div className="space-y-0.5 text-amber-900/80">
+              <div>订单号:<span className="font-mono">{existing.source_order_no}</span></div>
+              <div>创建时间:{new Date(existing.created_at).toLocaleString("zh-CN")}</div>
+              <div>当前状态:{existing.status_text ?? existing.status}</div>
+              {(existing.item_title_cn ?? existing.item_title) && (
+                <div className="truncate">标题:{existing.item_title_cn ?? existing.item_title}</div>
+              )}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <Button asChild size="sm" variant="outline">
+                <Link to="/purchase/japan-parcel/$id" params={{ id: existing.id }}>
+                  打开包裹
+                </Link>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runPipeline({ force: true })}
+                disabled={running}
+              >
+                仍要重新识别
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setExisting(null)}>
+                取消
+              </Button>
+            </div>
+          </div>
+        )}
 
         {tlSteps.length > 0 && (
           <div className="mt-3">
