@@ -153,7 +153,7 @@ export function PackPriceCalculatorDialog({ open, onOpenChange, item, landedCny 
           id: item.id,
           pack_pieces: piecesNum > 0 ? piecesNum : null,
           pack_pieces_source: piecesNum > 0 ? source : null,
-          pack_unit_note: unit.trim() || null,
+          pack_unit_note: unit.trim() || (piecesNum > 0 ? "个" : null),
         },
       });
       toast.success("已保存");
