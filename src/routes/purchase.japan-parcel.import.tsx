@@ -407,7 +407,7 @@ function ImportPage() {
                   size="sm"
                   className="bg-gradient-brand hover:opacity-90"
                   disabled={parsing || images.length === 0}
-                  onClick={runParse}
+                  onClick={() => runParse()}
                 >
                   {parsing ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -535,7 +535,7 @@ function ImportPage() {
               </div>
 
               <div className="flex justify-end gap-2 border-t pt-3">
-                <Button variant="outline" size="sm" onClick={runParse} disabled={parsing}>
+                <Button variant="outline" size="sm" onClick={() => runParse({ force: true })} disabled={parsing}>
                   <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> 重新识别
                 </Button>
                 {result.already_exists && (
